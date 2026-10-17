@@ -3,7 +3,7 @@ name: Betting Bot Monitor
 on:
   schedule:
     # Esegue il bot ogni ora (es. alle ore 00:00, 01:00, 02:00, ecc.)
-    - cron: '0 * * * *'
+    - cron: '0 */2 * * *'
   workflow_dispatch: # Permette di avviarlo a mano quando vuoi con un clic
 
 permissions:
