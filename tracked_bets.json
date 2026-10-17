@@ -1,1 +1,26 @@
-{}
+{
+    "Venezia_vs_Napoli": {
+        "sport": "soccer_italy_serie_a",
+        "home": "Venezia",
+        "away": "Napoli",
+        "esito": "Napoli",
+        "prob": 62.0,
+        "status": "active"
+    },
+    "Bologna_vs_Inter Milan": {
+        "sport": "soccer_italy_serie_a",
+        "home": "Bologna",
+        "away": "Inter Milan",
+        "esito": "Inter Milan",
+        "prob": 67.8,
+        "status": "active"
+    },
+    "New York Knicks_vs_Philadelphia 76ers": {
+        "sport": "basketball_nba",
+        "home": "New York Knicks",
+        "away": "Philadelphia 76ers",
+        "esito": "New York Knicks",
+        "prob": 72.1,
+        "status": "active"
+    }
+}
