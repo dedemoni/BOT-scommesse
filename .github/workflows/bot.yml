@@ -2,43 +2,40 @@ name: Betting Bot Monitor
 
 on:
   schedule:
-    # Esegue il bot ogni ora (es. alle ore 00:00, 01:00, 02:00, ecc.)
-    - cron: '0 */2 * * *'
-  workflow_dispatch: # Permette di avviarlo a mano quando vuoi con un clic
-
-permissions:
-  contents: write
+    # Esegue il bot due volte al giorno: alle 08:00 e alle 18:00 italiane (06:00 e 16:00 UTC)
+    - cron: '0 6,16 * * *'
+  workflow_dispatch: # Permette anche l'avvio manuale quando vuoi
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install requests
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
 
-    - name: Run Bot Script
-      env:
-        ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
-        FOOTBALL_DATA_KEY: ${{ secrets.FOOTBALL_DATA_KEY }}
-        DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-      run: |
-        python bot.py
+      - name: Run bot script
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+          FOOTBALL_DATA_KEY: ${{ secrets.FOOTBALL_DATA_KEY }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          python bot.py
 
-    - name: Commit and push updated tracked_bets.json (State)
-      run: |
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.io"
-        git add tracked_bets.json || true
-        git commit -m "Aggiornato stato scommesse automatico [skip ci]" || true
-        git push || true
+      - name: Commit and push state changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add tracked_bets.json || true
+          git commit -m "Aggiornamento automatico file di stato" || echo "Nessuna modifica da salvare"
+          git push || true
