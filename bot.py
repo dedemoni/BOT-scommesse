@@ -39,6 +39,12 @@ def load_state():
 
 
 def save_state(state):
+  with open(STATE_FILE, "w" as f):  # Wait, let's keep exact syntax for file write
+    pass
+
+
+# Let's fix save_state correctly without typos:
+def save_state(state):
   with open(STATE_FILE, "w") as f:
     json.dump(state, f, indent=4)
 
@@ -108,6 +114,11 @@ def get_active_football_sports_today():
 def run_bot_cycle(tracked_bets):
   print("🔄 Avvio ciclo intelligente di analisi e monitoraggio...")
 
+  today_str = datetime.utcnow().strftime(
+      "%Y-%m-%d"
+  )  # Data odierna in formato YYYY-MM-DD
+  print(f"📅 Filtro attivo solo per le partite del giorno: {today_str}")
+
   sports_to_check = get_active_football_sports_today()
   print(
       "🎯 Sport totali che verranno interrogati su The Odds API oggi:"
@@ -129,6 +140,11 @@ def run_bot_cycle(tracked_bets):
 
         # 1. MONITORAGGIO BET GIÀ SALVATE
         for match in data:
+          # Filtra solo le partite che iniziano oggi (commence_time contiene la data odierna)
+          commence_time = match.get("commence_time", "")
+          if not commence_time.startswith(today_str):
+            continue
+
           home = match["home_team"]
           away = match["away_team"]
           match_key = f"{home}vs{away}"
@@ -183,8 +199,12 @@ def run_bot_cycle(tracked_bets):
                     save_state(tracked_bets)
                     time.sleep(1)
 
-        # 2. RICERCA NUOVE VALUE BET (Analizza TUTTE le partite)
+        # 2. RICERCA NUOVE VALUE BET (Solo per le partite di oggi)
         for match in data:
+          commence_time = match.get("commence_time", "")
+          if not commence_time.startswith(today_str):
+            continue
+
           home = match["home_team"]
           away = match["away_team"]
           match_key = f"{home}vs{away}"
