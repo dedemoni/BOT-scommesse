@@ -39,7 +39,7 @@ def load_state():
 
 
 def save_state(state):
-  with open(STATE_FILE, "w" as f):  # Wait, let's keep exact syntax for file write
+  with open(STATE_FILE, "w") as f:  # Wait, let's keep exact syntax for file write
     pass
 
 
