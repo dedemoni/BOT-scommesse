@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import os
 import time
@@ -60,6 +60,10 @@ def get_active_football_sports_today():
     active_sports = set(ALWAYS_ACTIVE_SPORTS)
 
     if not FOOTBALL_DATA_KEY:
+        print(
+            "⚠️ FOOTBALL_DATA_KEY non trovata, includo tutti i campionati per"
+            " sicurezza."
+        )
         return list(LEAGUE_MAPPING.values()) + ALWAYS_ACTIVE_SPORTS
 
     url = "https://api.football-data.org/v4/matches"
@@ -77,9 +81,21 @@ def get_active_football_sports_today():
                     found_competitions.add(LEAGUE_MAPPING[comp_code])
             for sport in found_competitions:
                 active_sports.add(sport)
+            print(
+                "✅ Campionati di calcio attivi oggi trovati:"
+                f" {list(found_competitions)}"
+            )
         else:
+            print(
+                f"⚠️ Errore nel calendario (Codice {response.status_code}),"
+                " procedo con tutti i campionati."
+            )
             return list(LEAGUE_MAPPING.values()) + ALWAYS_ACTIVE_SPORTS
-    except:
+    except Exception as e:
+        print(
+            "⚠️ Errore di connessione al calendario:"
+            f" {e}, procedo con tutti i campionati."
+        )
         return list(LEAGUE_MAPPING.values()) + ALWAYS_ACTIVE_SPORTS
 
     return list(active_sports)
@@ -191,8 +207,22 @@ def check_nhl_form(team_name):
 
 
 def run_bot_cycle(tracked_bets):
-    print("🔄 Avvio ciclo intelligente multi-sport di analisi...")
+    print("🔄 Avvio ciclo intelligente multi-sport di analisi e monitoraggio...")
     sports_to_check = get_active_football_sports_today()
+    print(
+        "🎯 Sport totali che verranno interrogati su The Odds API oggi:"
+        f" {len(sports_to_check)}"
+    )
+
+    # Calcolo inizio e fine giornata odierna in formato UTC ISO per il filtro API
+    now_utc = datetime.now(timezone.utc)
+    start_of_day = now_utc.replace(
+        hour=0, minute=0, second=0, microsecond=0
+    ).strftime("%Y-%m-%dT%H:%M:%SZ")
+    end_of_day = now_utc.replace(
+        hour=23, minute=59, second=59, microsecond=0
+    ).strftime("%Y-%m-%dT%H:%M:%SZ")
+    today_str = now_utc.strftime("%Y-%m-%d")
 
     for sport in sports_to_check:
         url = f"https://api.the-odds-api.com/v4/sports/{sport}/odds/"
@@ -201,6 +231,8 @@ def run_bot_cycle(tracked_bets):
             "regions": "eu",
             "markets": "h2h",
             "oddsFormat": "decimal",
+            "commenceTimeFrom": start_of_day,
+            "commenceTimeTo": end_of_day,
         }
         try:
             res = requests.get(url, params=params)
@@ -242,8 +274,14 @@ def run_bot_cycle(tracked_bets):
                                         save_state(tracked_bets)
                                         time.sleep(1)
 
-                # 2. RICERCA NUOVE VALUE BET CON FILTRI MULTISPORT
+                # 2. RICERCA NUOVE VALUE BET CON FILTRI MULTISPORT E DATA
                 for match in data:
+                    commence_time = match.get("commence_time", "")
+                    if commence_time and not commence_time.startswith(
+                        today_str
+                    ):
+                        continue
+
                     home = match["home_team"]
                     away = match["away_team"]
                     match_key = f"{home}vs{away}"
