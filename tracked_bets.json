@@ -45,7 +45,7 @@
         "away": "Eintracht Frankfurt",
         "esito": "Borussia Dortmund",
         "prob": 70.7,
-        "status": "active"
+        "status": "revoked"
     },
     "CF MontrealvsNashville SC": {
         "sport": "soccer_usa_mls",
