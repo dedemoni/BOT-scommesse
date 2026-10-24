@@ -1,9 +1,9 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import json
 import os
 import time
 import requests
-from zoneinfo import ZoneInfo  # Per gestire correttamente i fusi orari locali (es. Roma)
+from zoneinfo import ZoneInfo
 
 # ================= CONFIGURAZIONE DA GITHUB SECRETS =================
 ODDS_API_KEY = os.environ.get("ODDS_API_KEY")
@@ -12,7 +12,6 @@ DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 STATE_FILE = "tracked_bets.json"
 # ====================================================================
 
-# Mappa per collegare i codici di Football-Data.org a quelli di The Odds API (Calcio)
 LEAGUE_MAPPING = {
     "SA": "soccer_italy_serie_a",
     "PL": "soccer_epl",
@@ -56,10 +55,10 @@ def send_discord_alert(message):
 
 
 def calculate_stake(prob):
-    """Calcola la puntata consigliata in frazioni di unità (max 1 unità) basata sulla probabilità"""
-    if prob >= 80.0:
+    """Calcola la puntata in frazioni di unità (max 1) basata sulla probabilità"""
+    if prob >= 82.0:
         return "1/2 unità (0.50)"
-    elif prob >= 75.0:
+    elif prob >= 76.0:
         return "1/3 unità (0.33)"
     elif prob >= 70.0:
         return "1/4 unità (0.25)"
@@ -68,7 +67,7 @@ def calculate_stake(prob):
 
 
 def format_match_time(iso_time_str):
-    """Converte il tempo ISO UTC in formato ora locale italiana leggibile"""
+    """Converte l'ora ISO UTC in orario locale italiano (Europe/Rome)"""
     try:
         dt_utc = datetime.fromisoformat(iso_time_str.replace("Z", "+00:00"))
         dt_local = dt_utc.astimezone(ZoneInfo("Europe/Rome"))
@@ -82,7 +81,7 @@ def get_active_football_sports_today():
     active_sports = set(ALWAYS_ACTIVE_SPORTS)
 
     if not FOOTBALL_DATA_KEY:
-        print("⚠️ FOOTBALL_DATA_KEY non trovata, includo tutti i campionati per sicurezza.")
+        print("⚠️ FOOTBALL_DATA_KEY non trovata, procedo con tutti i campionati.")
         return list(LEAGUE_MAPPING.values()) + ALWAYS_ACTIVE_SPORTS
 
     url = "https://api.football-data.org/v4/matches"
@@ -102,21 +101,21 @@ def get_active_football_sports_today():
                 active_sports.add(sport)
             print(f"✅ Campionati di calcio attivi oggi trovati: {list(found_competitions)}")
         else:
-            print(f"⚠️ Errore nel calendario (Codice {response.status_code}), procedo con tutti i campionati.")
+            print(f"⚠️ Errore calendario (Codice {response.status_code}), procedo con tutti.")
             return list(LEAGUE_MAPPING.values()) + ALWAYS_ACTIVE_SPORTS
     except Exception as e:
-        print(f"⚠️ Errore di connessione al calendario: {e}, procedo con tutti i campionati.")
+        print(f"⚠️ Errore di connessione al calendario: {e}, procedo con tutti.")
         return list(LEAGUE_MAPPING.values()) + ALWAYS_ACTIVE_SPORTS
 
     return list(active_sports)
 
 
-# ================= CONTROLLI STATO DI FORMA MULTISPORT (GRATUITI) =================
+# ================= CONTROLLI STATISTICI AVANZATI E GRATUITI =================
 
 def check_soccer_form(sport, team_name):
-    """Controlla forma calcio tramite Football-Data.org"""
+    """Controlla forma e Differenza Reti tramite Football-Data.org"""
     if not FOOTBALL_DATA_KEY:
-        return True, "N/A"
+        return True, "Forma N/A (Key mancante)"
 
     comp_code = None
     for code, odds_name in LEAGUE_MAPPING.items():
@@ -125,7 +124,7 @@ def check_soccer_form(sport, team_name):
             break
 
     if not comp_code:
-        return True, "N/A"
+        return True, "Forma N/A"
 
     url = f"https://api.football-data.org/v4/competitions/{comp_code}/standings"
     headers = {"X-Auth-Token": FOOTBALL_DATA_KEY}
@@ -141,20 +140,29 @@ def check_soccer_form(sport, team_name):
                         if team_name.lower() in current_team.lower() or current_team.lower() in team_name.lower():
                             form = row.get("form", "")
                             position = row.get("position", 0)
-                            # Controllo di sicurezza rafforzato: scarta se ci sono troppe sconfitte recenti
+                            goal_diff = row.get("goalDifference", 0)
+
+                            # 1. Scarta se troppe sconfitte recenti (3 o più)
                             if form and form.count("L") >= 3:
                                 return False, f"Forma rischiosa (Ultime 5: {form}, Pos: {position}°)"
-                            return True, f"Pos: {position}° | Forma: {form if form else 'N/D'}"
+
+                            # 2. Scarta se la differenza reti in classifica è negativa o pari a 0
+                            if goal_diff <= 0:
+                                return False, f"Diff. Reti insufficiente ({goal_diff} gol, Pos: {position}°)"
+
+                            return True, f"Pos: {position}° | Diff.Reti: {goal_diff:+d} | Forma: {form if form else 'N/D'}"
     except Exception as e:
         print(f"Errore controllo calcio per {team_name}: {e}")
     return True, "Forma non verificata"
 
 
 def check_nba_form(team_name):
-    """Controlla record e stato NBA tramite API pubblica gratuita ESPN"""
-    url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/standings"
+    """Controlla record e il filtro Back-to-Back (partite consecutive) via ESPN API"""
+    url_standings = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/standings"
+    form_info = "NBA Form OK"
     try:
-        res = requests.get(url, timeout=5)
+        # Controllo Record
+        res = requests.get(url_standings, timeout=5)
         if res.status_code == 200:
             data = res.json()
             for group in data.get("children", []):
@@ -163,14 +171,28 @@ def check_nba_form(team_name):
                         t_name = entry.get("team", {}).get("displayName", "")
                         if team_name.lower() in t_name.lower() or t_name.lower() in team_name.lower():
                             stats = entry.get("stats", [])
-                            record = "N/A"
                             for stat in stats:
                                 if stat.get("name") == "overall":
                                     record = stat.get("displayValue", "N/A")
-                            return True, f"NBA Record: {record}"
+                                    form_info = f"NBA Record: {record}"
+
+        # Controllo Back-to-Back (Partita giocata ieri)
+        yesterday_str = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y%m%d")
+        url_scoreboard = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates={yesterday_str}"
+        res_sb = requests.get(url_scoreboard, timeout=5)
+        if res_sb.status_code == 200:
+            sb_data = res_sb.json()
+            for event in sb_data.get("events", []):
+                for comp in event.get("competitions", []):
+                    for competitor in comp.get("competitors", []):
+                        played_team = competitor.get("team", {}).get("displayName", "")
+                        if team_name.lower() in played_team.lower() or played_team.lower() in team_name.lower():
+                            return False, f"B2B Rischio Stanchezza (Ha giocato anche ieri!) | {form_info}"
+
+        return True, form_info
     except Exception as e:
         print(f"Errore controllo NBA per {team_name}: {e}")
-    return True, "NBA Form OK"
+    return True, form_info
 
 
 def check_nhl_form(team_name):
@@ -198,9 +220,8 @@ def check_nhl_form(team_name):
 # ==============================================================================
 
 def run_bot_cycle(tracked_bets):
-    print("🔄 Avvio ciclo intelligente multi-sport di analisi e monitoraggio...")
+    print("🔄 Avvio ciclo intelligente multi-sport con controlli statistici avanzati...")
     sports_to_check = get_active_football_sports_today()
-    print(f"🎯 Sport totali che verranno interrogati su The Odds API oggi: {len(sports_to_check)}")
 
     now_utc = datetime.now(timezone.utc)
     start_of_day = now_utc.replace(hour=0, minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -235,12 +256,11 @@ def run_bot_cycle(tracked_bets):
                             for out in outcomes:
                                 if out["name"] == tracked_bets[match_key]["esito"]:
                                     current_price = out["price"]
-                                    implied_prob = 1 / current_price * 100
+                                    implied_prob = (1 / current_price) * 100
                                     current_prob = round(implied_prob + 4.5, 1)
                                     if current_prob > 95:
                                         current_prob = 95.0
 
-                                    # Aggiornato limite revoca al 65.0%
                                     if current_prob < 65.0:
                                         msg = (
                                             "----------------------------------------\n"
@@ -255,7 +275,7 @@ def run_bot_cycle(tracked_bets):
                                         save_state(tracked_bets)
                                         time.sleep(1)
 
-                # 2. RICERCA NUOVE VALUE BET (SOGLIA PROBABILITÀ >= 65%)
+                # 2. RICERCA NUOVE VALUE BET
                 for match in data:
                     commence_time = match.get("commence_time", "")
                     if commence_time and not commence_time.startswith(today_str):
@@ -273,24 +293,36 @@ def run_bot_cycle(tracked_bets):
                         book = bookmakers[0]["title"]
                         outcomes = bookmakers[0]["markets"][0]["outcomes"]
 
+                        # Calcolo probabilità di tutte le opzioni per filtro equilibrio/derby
+                        probs_dict = {}
+                        for out in outcomes:
+                            p = round(((1 / out["price"]) * 100) + 4.5, 1)
+                            probs_dict[out["name"]] = min(p, 95.0)
+
+                        # Filtro Anti-Derby / Equilibrato: se la differenza tra le due opzioni principali è < 15%
+                        if len(probs_dict) >= 2:
+                            sorted_p = sorted(probs_dict.values(), reverse=True)
+                            if (sorted_p[0] - sorted_p[1]) < 15.0:
+                                print(f"⚠️ Scartata {home} vs {away}: Scontro troppo equilibrato/Derby.")
+                                continue
+
                         for out in outcomes:
                             name = out["name"]
                             price = out["price"]
+                            calculated_prob = probs_dict[name]
 
-                            implied_prob = 1 / price * 100
-                            calculated_prob = round(implied_prob + 4.5, 1)
-                            if calculated_prob > 95:
-                                calculated_prob = 95.0
+                            # Soglia base del 65%, oppure 70% se gioca in Trasferta (Fattore Campo)
+                            is_away_team = (name == away)
+                            min_prob_required = 70.0 if is_away_team else 65.0
 
-                            # APPLICATI I NUOVI LIMITI: Quota > 1.29 e Probabilità >= 65.0%
-                            if price > 1.29 and calculated_prob >= 65.0:
+                            if price > 1.29 and calculated_prob >= min_prob_required:
                                 target_team = home if name == home else (away if name == away else None)
 
                                 form_ok = True
                                 form_info = "N/A"
 
                                 if target_team:
-                                    print(f"🔍 Controllo stato per [{sport}]: {target_team}...")
+                                    print(f"🔍 Controllo avanzato per [{sport}]: {target_team}...")
                                     if "soccer" in sport:
                                         form_ok, form_info = check_soccer_form(sport, target_team)
                                     elif "basketball_nba" in sport:
@@ -299,7 +331,7 @@ def run_bot_cycle(tracked_bets):
                                         form_ok, form_info = check_nhl_form(target_team)
 
                                 if not form_ok:
-                                    print(f"⚠️ Scartata {home} vs {away} per statistiche sfavorevoli: {form_info}")
+                                    print(f"⚠️ Scartata {home} vs {away} per filtro statistico: {form_info}")
                                     continue
 
                                 formatted_time = format_match_time(commence_time)
@@ -311,12 +343,12 @@ def run_bot_cycle(tracked_bets):
                                     f"🏆 Sport: {sport.replace('_', ' ').upper()}\n"
                                     f"⚔️ Match: {home} vs {away}\n"
                                     f"⏰ Inizio: {formatted_time}\n"
-                                    f"🎯 Esito Consigliato: {name}\n"
+                                    f"🎯 Esito Consigliato: {name} {'(Trasferta)' if is_away_team else '(Casa)'}\n"
                                     f"💰 Quota: {price} ({book})\n"
                                     f"📊 Probabilità Stimata: {calculated_prob}%\n"
                                     f"💵 Stake Consigliato: **{recommended_stake}**\n"
                                     f"📈 Dettagli: {form_info}\n"
-                                    "✅ Filtri Superati con Successo!"
+                                    "✅ Tutti i Filtri Superati con Successo!"
                                 )
                                 send_discord_alert(msg)
 
