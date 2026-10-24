@@ -22,5 +22,69 @@
         "esito": "New York Knicks",
         "prob": 72.1,
         "status": "active"
+    },
+    "LaziovsParma": {
+        "sport": "soccer_italy_serie_a",
+        "home": "Lazio",
+        "away": "Parma",
+        "esito": "Lazio",
+        "prob": 70.7,
+        "status": "active"
+    },
+    "FSV Mainz 05vsWerder Bremen": {
+        "sport": "soccer_germany_bundesliga",
+        "home": "FSV Mainz 05",
+        "away": "Werder Bremen",
+        "esito": "Werder Bremen",
+        "prob": 65.1,
+        "status": "active"
+    },
+    "Borussia DortmundvsEintracht Frankfurt": {
+        "sport": "soccer_germany_bundesliga",
+        "home": "Borussia Dortmund",
+        "away": "Eintracht Frankfurt",
+        "esito": "Borussia Dortmund",
+        "prob": 70.7,
+        "status": "active"
+    },
+    "CF MontrealvsNashville SC": {
+        "sport": "soccer_usa_mls",
+        "home": "CF Montreal",
+        "away": "Nashville SC",
+        "esito": "Nashville SC",
+        "prob": 74.4,
+        "status": "active"
+    },
+    "Philadelphia UnionvsNew England Revolution": {
+        "sport": "soccer_usa_mls",
+        "home": "Philadelphia Union",
+        "away": "New England Revolution",
+        "esito": "Philadelphia Union",
+        "prob": 75.9,
+        "status": "active"
+    },
+    "Boston BruinsvsSan Jose Sharks": {
+        "sport": "icehockey_nhl",
+        "home": "Boston Bruins",
+        "away": "San Jose Sharks",
+        "esito": "Boston Bruins",
+        "prob": 70.7,
+        "status": "active"
+    },
+    "St Louis BluesvsCarolina Hurricanes": {
+        "sport": "icehockey_nhl",
+        "home": "St Louis Blues",
+        "away": "Carolina Hurricanes",
+        "esito": "Carolina Hurricanes",
+        "prob": 65.5,
+        "status": "active"
+    },
+    "Edmonton OilersvsToronto Maple Leafs": {
+        "sport": "icehockey_nhl",
+        "home": "Edmonton Oilers",
+        "away": "Toronto Maple Leafs",
+        "esito": "Edmonton Oilers",
+        "prob": 68.6,
+        "status": "active"
     }
 }
