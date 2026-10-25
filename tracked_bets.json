@@ -93,7 +93,7 @@
         "away": "Fiorentina",
         "esito": "Inter Milan",
         "prob": 67.8,
-        "status": "active"
+        "status": "revoked"
     },
     "Athletic BilbaovsGetafe": {
         "sport": "soccer_spain_la_liga",
