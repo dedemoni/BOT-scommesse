@@ -86,5 +86,85 @@
         "esito": "Edmonton Oilers",
         "prob": 68.6,
         "status": "active"
+    },
+    "Inter MilanvsFiorentina": {
+        "sport": "soccer_italy_serie_a",
+        "home": "Inter Milan",
+        "away": "Fiorentina",
+        "esito": "Inter Milan",
+        "prob": 67.8,
+        "status": "active"
+    },
+    "Athletic BilbaovsGetafe": {
+        "sport": "soccer_spain_la_liga",
+        "home": "Athletic Bilbao",
+        "away": "Getafe",
+        "esito": "Athletic Bilbao",
+        "prob": 70.3,
+        "status": "active"
+    },
+    "Real SociedadvsLevante": {
+        "sport": "soccer_spain_la_liga",
+        "home": "Real Sociedad",
+        "away": "Levante",
+        "esito": "Real Sociedad",
+        "prob": 66.2,
+        "status": "active"
+    },
+    "BarcelonavsReal Madrid": {
+        "sport": "soccer_spain_la_liga",
+        "home": "Barcelona",
+        "away": "Real Madrid",
+        "esito": "Barcelona",
+        "prob": 65.5,
+        "status": "active"
+    },
+    "SC FreiburgvsBayern Munich": {
+        "sport": "soccer_germany_bundesliga",
+        "home": "SC Freiburg",
+        "away": "Bayern Munich",
+        "esito": "Bayern Munich",
+        "prob": 70.7,
+        "status": "active"
+    },
+    "MarseillevsLe Havre": {
+        "sport": "soccer_france_ligue_one",
+        "home": "Marseille",
+        "away": "Le Havre",
+        "esito": "Marseille",
+        "prob": 73.5,
+        "status": "active"
+    },
+    "ToulousevsTroyes": {
+        "sport": "soccer_france_ligue_one",
+        "home": "Toulouse",
+        "away": "Troyes",
+        "esito": "Toulouse",
+        "prob": 73.5,
+        "status": "active"
+    },
+    "Utah JazzvsLos Angeles Lakers": {
+        "sport": "basketball_nba",
+        "home": "Utah Jazz",
+        "away": "Los Angeles Lakers",
+        "esito": "Los Angeles Lakers",
+        "prob": 73.0,
+        "status": "active"
+    },
+    "Brooklyn NetsvsIndiana Pacers": {
+        "sport": "basketball_nba",
+        "home": "Brooklyn Nets",
+        "away": "Indiana Pacers",
+        "esito": "Indiana Pacers",
+        "prob": 78.0,
+        "status": "active"
+    },
+    "New York KnicksvsOrlando Magic": {
+        "sport": "basketball_nba",
+        "home": "New York Knicks",
+        "away": "Orlando Magic",
+        "esito": "New York Knicks",
+        "prob": 80.3,
+        "status": "active"
     }
 }
