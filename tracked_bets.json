@@ -141,7 +141,7 @@
         "away": "Troyes",
         "esito": "Toulouse",
         "prob": 73.5,
-        "status": "active"
+        "status": "revoked"
     },
     "Utah JazzvsLos Angeles Lakers": {
         "sport": "basketball_nba",
@@ -165,6 +165,14 @@
         "away": "Orlando Magic",
         "esito": "New York Knicks",
         "prob": 80.3,
+        "status": "active"
+    },
+    "SunderlandvsLeeds United": {
+        "sport": "soccer_epl",
+        "home": "Sunderland",
+        "away": "Leeds United",
+        "esito": "Draw",
+        "prob": 69.9,
         "status": "active"
     }
 }
