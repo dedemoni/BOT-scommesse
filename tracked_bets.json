@@ -174,5 +174,21 @@
         "esito": "Draw",
         "prob": 69.9,
         "status": "active"
+    },
+    "Cleveland CavaliersvsMinnesota Timberwolves": {
+        "sport": "basketball_nba",
+        "home": "Cleveland Cavaliers",
+        "away": "Minnesota Timberwolves",
+        "esito": "Cleveland Cavaliers",
+        "prob": 67.0,
+        "status": "active"
+    },
+    "Miami HeatvsDallas Mavericks": {
+        "sport": "basketball_nba",
+        "home": "Miami Heat",
+        "away": "Dallas Mavericks",
+        "esito": "Miami Heat",
+        "prob": 77.5,
+        "status": "active"
     }
 }
