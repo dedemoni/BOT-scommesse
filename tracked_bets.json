@@ -190,5 +190,13 @@
         "esito": "Miami Heat",
         "prob": 77.5,
         "status": "active"
+    },
+    "AS RomavsCagliari": {
+        "sport": "soccer_italy_serie_a",
+        "home": "AS Roma",
+        "away": "Cagliari",
+        "esito": "AS Roma",
+        "prob": 80.8,
+        "status": "active"
     }
 }
