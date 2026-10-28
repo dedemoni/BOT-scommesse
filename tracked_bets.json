@@ -198,5 +198,45 @@
         "esito": "AS Roma",
         "prob": 80.8,
         "status": "active"
+    },
+    "VeneziavsInter Milan": {
+        "sport": "soccer_italy_serie_a",
+        "home": "Venezia",
+        "away": "Inter Milan",
+        "esito": "Inter Milan",
+        "prob": 77.0,
+        "status": "active"
+    },
+    "Charlotte FCvsCF Montreal": {
+        "sport": "soccer_usa_mls",
+        "home": "Charlotte FC",
+        "away": "CF Montreal",
+        "esito": "Charlotte FC",
+        "prob": 74.4,
+        "status": "active"
+    },
+    "Inter Miami CFvsFC Cincinnati": {
+        "sport": "soccer_usa_mls",
+        "home": "Inter Miami CF",
+        "away": "FC Cincinnati",
+        "esito": "Inter Miami CF",
+        "prob": 74.4,
+        "status": "active"
+    },
+    "Indiana PacersvsPhiladelphia 76ers": {
+        "sport": "basketball_nba",
+        "home": "Indiana Pacers",
+        "away": "Philadelphia 76ers",
+        "esito": "Philadelphia 76ers",
+        "prob": 71.2,
+        "status": "active"
+    },
+    "Toronto RaptorsvsOrlando Magic": {
+        "sport": "basketball_nba",
+        "home": "Toronto Raptors",
+        "away": "Orlando Magic",
+        "esito": "Toronto Raptors",
+        "prob": 71.2,
+        "status": "active"
     }
 }
