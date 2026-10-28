@@ -3,7 +3,7 @@ name: Run Betting Bot
 on:
   schedule:
     # Esegue il bot due volte al giorno (es. alle 09:00 e alle 15:00 UTC)
-    - cron: '0 9,16 * * *'
+    - cron: '0 11,16 * * *'
   workflow_dispatch: # Permette anche l'esecuzione manuale da GitHub
 
 jobs:
