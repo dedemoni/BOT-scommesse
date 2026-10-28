@@ -238,5 +238,13 @@
         "esito": "Toronto Raptors",
         "prob": 71.2,
         "status": "active"
+    },
+    "GenoavsJuventus": {
+        "sport": "soccer_italy_serie_a",
+        "home": "Genoa",
+        "away": "Juventus",
+        "esito": "Genoa",
+        "prob": 81.4,
+        "status": "active"
     }
 }
