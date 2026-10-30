@@ -246,5 +246,29 @@
         "esito": "Genoa",
         "prob": 81.4,
         "status": "active"
+    },
+    "VillarrealvsEspanyol": {
+        "sport": "soccer_spain_la_liga",
+        "home": "Villarreal",
+        "away": "Espanyol",
+        "esito": "Villarreal",
+        "prob": 75.4,
+        "status": "active"
+    },
+    "Le HavrevsParis Saint Germain": {
+        "sport": "soccer_france_ligue_one",
+        "home": "Le Havre",
+        "away": "Paris Saint Germain",
+        "esito": "Paris Saint Germain",
+        "prob": 79.7,
+        "status": "active"
+    },
+    "Brooklyn NetsvsDetroit Pistons": {
+        "sport": "basketball_nba",
+        "home": "Brooklyn Nets",
+        "away": "Detroit Pistons",
+        "esito": "Detroit Pistons",
+        "prob": 79.1,
+        "status": "active"
     }
 }
