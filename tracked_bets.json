@@ -270,5 +270,13 @@
         "esito": "Detroit Pistons",
         "prob": 79.1,
         "status": "active"
+    },
+    "Vegas Golden KnightsvsNew Jersey Devils": {
+        "sport": "icehockey_nhl",
+        "home": "Vegas Golden Knights",
+        "away": "New Jersey Devils",
+        "esito": "New Jersey Devils",
+        "prob": 70.3,
+        "status": "active"
     }
 }
