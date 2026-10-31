@@ -278,5 +278,77 @@
         "esito": "New Jersey Devils",
         "prob": 70.3,
         "status": "active"
+    },
+    "Manchester CityvsBrighton and Hove Albion": {
+        "sport": "soccer_epl",
+        "home": "Manchester City",
+        "away": "Brighton and Hove Albion",
+        "esito": "Manchester City",
+        "prob": 65.5,
+        "status": "active"
+    },
+    "Tottenham HotspurvsCrystal Palace": {
+        "sport": "soccer_epl",
+        "home": "Tottenham Hotspur",
+        "away": "Crystal Palace",
+        "esito": "Tottenham Hotspur",
+        "prob": 65.1,
+        "status": "active"
+    },
+    "Real BetisvsM\u00e1laga": {
+        "sport": "soccer_spain_la_liga",
+        "home": "Real Betis",
+        "away": "M\u00e1laga",
+        "esito": "Real Betis",
+        "prob": 80.3,
+        "status": "active"
+    },
+    "Bayern MunichvsBorussia Dortmund": {
+        "sport": "soccer_germany_bundesliga",
+        "home": "Bayern Munich",
+        "away": "Borussia Dortmund",
+        "esito": "Bayern Munich",
+        "prob": 79.7,
+        "status": "active"
+    },
+    "New York City FCvsCF Montreal": {
+        "sport": "soccer_usa_mls",
+        "home": "New York City FC",
+        "away": "CF Montreal",
+        "esito": "New York City FC",
+        "prob": 75.9,
+        "status": "active"
+    },
+    "Columbus Crew SCvsD.C. United": {
+        "sport": "soccer_usa_mls",
+        "home": "Columbus Crew SC",
+        "away": "D.C. United",
+        "esito": "Columbus Crew SC",
+        "prob": 75.9,
+        "status": "active"
+    },
+    "LA GalaxyvsAustin FC": {
+        "sport": "soccer_usa_mls",
+        "home": "LA Galaxy",
+        "away": "Austin FC",
+        "esito": "LA Galaxy",
+        "prob": 73.5,
+        "status": "active"
+    },
+    "Utah JazzvsPortland Trail Blazers": {
+        "sport": "basketball_nba",
+        "home": "Utah Jazz",
+        "away": "Portland Trail Blazers",
+        "esito": "Portland Trail Blazers",
+        "prob": 77.0,
+        "status": "active"
+    },
+    "Boston BruinsvsChicago Blackhawks": {
+        "sport": "icehockey_nhl",
+        "home": "Boston Bruins",
+        "away": "Chicago Blackhawks",
+        "esito": "Boston Bruins",
+        "prob": 74.9,
+        "status": "active"
     }
 }
