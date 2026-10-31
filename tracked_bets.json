@@ -349,7 +349,7 @@
         "away": "Chicago Blackhawks",
         "esito": "Boston Bruins",
         "prob": 74.9,
-        "status": "active"
+        "status": "revoked"
     },
     "BournemouthvsLeeds United": {
         "sport": "soccer_epl",
@@ -381,6 +381,22 @@
         "away": "SC Freiburg",
         "esito": "Augsburg",
         "prob": 69.4,
+        "status": "active"
+    },
+    "Sporting Kansas CityvsFC Dallas": {
+        "sport": "soccer_usa_mls",
+        "home": "Sporting Kansas City",
+        "away": "FC Dallas",
+        "esito": "FC Dallas",
+        "prob": 77.0,
+        "status": "active"
+    },
+    "St. Louis City SCvsSan Diego FC": {
+        "sport": "soccer_usa_mls",
+        "home": "St. Louis City SC",
+        "away": "San Diego FC",
+        "esito": "St. Louis City SC",
+        "prob": 68.2,
         "status": "active"
     }
 }
