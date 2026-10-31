@@ -285,7 +285,7 @@
         "away": "Brighton and Hove Albion",
         "esito": "Manchester City",
         "prob": 65.5,
-        "status": "active"
+        "status": "revoked"
     },
     "Tottenham HotspurvsCrystal Palace": {
         "sport": "soccer_epl",
@@ -349,6 +349,38 @@
         "away": "Chicago Blackhawks",
         "esito": "Boston Bruins",
         "prob": 74.9,
+        "status": "active"
+    },
+    "BournemouthvsLeeds United": {
+        "sport": "soccer_epl",
+        "home": "Bournemouth",
+        "away": "Leeds United",
+        "esito": "Bournemouth",
+        "prob": 78.0,
+        "status": "active"
+    },
+    "BrentfordvsNottingham Forest": {
+        "sport": "soccer_epl",
+        "home": "Brentford",
+        "away": "Nottingham Forest",
+        "esito": "Brentford",
+        "prob": 75.9,
+        "status": "active"
+    },
+    "Hull CityvsIpswich Town": {
+        "sport": "soccer_epl",
+        "home": "Hull City",
+        "away": "Ipswich Town",
+        "esito": "Ipswich Town",
+        "prob": 78.0,
+        "status": "active"
+    },
+    "AugsburgvsSC Freiburg": {
+        "sport": "soccer_germany_bundesliga",
+        "home": "Augsburg",
+        "away": "SC Freiburg",
+        "esito": "Augsburg",
+        "prob": 69.4,
         "status": "active"
     }
 }
