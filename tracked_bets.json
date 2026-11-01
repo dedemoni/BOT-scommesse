@@ -398,5 +398,77 @@
         "esito": "St. Louis City SC",
         "prob": 68.2,
         "status": "active"
+    },
+    "ComovsVenezia": {
+        "sport": "soccer_italy_serie_a",
+        "home": "Como",
+        "away": "Venezia",
+        "esito": "Como",
+        "prob": 81.4,
+        "status": "active"
+    },
+    "LaziovsCagliari": {
+        "sport": "soccer_italy_serie_a",
+        "home": "Lazio",
+        "away": "Cagliari",
+        "esito": "Lazio",
+        "prob": 72.1,
+        "status": "active"
+    },
+    "Eintracht FrankfurtvsHamburger SV": {
+        "sport": "soccer_germany_bundesliga",
+        "home": "Eintracht Frankfurt",
+        "away": "Hamburger SV",
+        "esito": "Eintracht Frankfurt",
+        "prob": 69.0,
+        "status": "active"
+    },
+    "LyonvsAngers": {
+        "sport": "soccer_france_ligue_one",
+        "home": "Lyon",
+        "away": "Angers",
+        "esito": "Lyon",
+        "prob": 73.9,
+        "status": "active"
+    },
+    "Vancouver Whitecaps FCvsSeattle Sounders FC": {
+        "sport": "soccer_usa_mls",
+        "home": "Vancouver Whitecaps FC",
+        "away": "Seattle Sounders FC",
+        "esito": "Vancouver Whitecaps FC",
+        "prob": 68.6,
+        "status": "active"
+    },
+    "Nashville SCvsNew York Red Bulls": {
+        "sport": "soccer_usa_mls",
+        "home": "Nashville SC",
+        "away": "New York Red Bulls",
+        "esito": "Nashville SC",
+        "prob": 72.5,
+        "status": "active"
+    },
+    "Orlando MagicvsBoston Celtics": {
+        "sport": "basketball_nba",
+        "home": "Orlando Magic",
+        "away": "Boston Celtics",
+        "esito": "Boston Celtics",
+        "prob": 75.9,
+        "status": "active"
+    },
+    "Indiana PacersvsBrooklyn Nets": {
+        "sport": "basketball_nba",
+        "home": "Indiana Pacers",
+        "away": "Brooklyn Nets",
+        "esito": "Indiana Pacers",
+        "prob": 65.8,
+        "status": "active"
+    },
+    "Carolina HurricanesvsWinnipeg Jets": {
+        "sport": "icehockey_nhl",
+        "home": "Carolina Hurricanes",
+        "away": "Winnipeg Jets",
+        "esito": "Carolina Hurricanes",
+        "prob": 65.8,
+        "status": "active"
     }
 }
