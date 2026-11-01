@@ -470,5 +470,21 @@
         "esito": "Carolina Hurricanes",
         "prob": 65.8,
         "status": "active"
+    },
+    "LiverpoolvsArsenal": {
+        "sport": "soccer_epl",
+        "home": "Liverpool",
+        "away": "Arsenal",
+        "esito": "Arsenal",
+        "prob": 73.5,
+        "status": "active"
+    },
+    "Paris FCvsAS Monaco": {
+        "sport": "soccer_france_ligue_one",
+        "home": "Paris FC",
+        "away": "AS Monaco",
+        "esito": "Paris FC",
+        "prob": 72.5,
+        "status": "active"
     }
 }
