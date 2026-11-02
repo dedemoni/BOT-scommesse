@@ -486,5 +486,13 @@
         "esito": "Paris FC",
         "prob": 72.5,
         "status": "active"
+    },
+    "Atalanta BCvsParma": {
+        "sport": "soccer_italy_serie_a",
+        "home": "Atalanta BC",
+        "away": "Parma",
+        "esito": "Atalanta BC",
+        "prob": 72.1,
+        "status": "active"
     }
 }
