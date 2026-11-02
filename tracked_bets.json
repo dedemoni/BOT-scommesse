@@ -493,6 +493,22 @@
         "away": "Parma",
         "esito": "Atalanta BC",
         "prob": 72.1,
+        "status": "revoked"
+    },
+    "Newcastle UnitedvsEverton": {
+        "sport": "soccer_epl",
+        "home": "Newcastle United",
+        "away": "Everton",
+        "esito": "Everton",
+        "prob": 75.9,
+        "status": "active"
+    },
+    "LorientvsBrest": {
+        "sport": "soccer_france_ligue_one",
+        "home": "Lorient",
+        "away": "Brest",
+        "esito": "Brest",
+        "prob": 79.1,
         "status": "active"
     }
 }
