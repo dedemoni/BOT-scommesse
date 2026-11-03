@@ -510,5 +510,21 @@
         "esito": "Brest",
         "prob": 79.1,
         "status": "active"
+    },
+    "Bod\u00f8/GlimtvsLille": {
+        "sport": "soccer_uefa_champs_league",
+        "home": "Bod\u00f8/Glimt",
+        "away": "Lille",
+        "esito": "Bod\u00f8/Glimt",
+        "prob": 67.0,
+        "status": "active"
+    },
+    "LASKvs\u0160K Slovan Bratislava": {
+        "sport": "soccer_uefa_champs_league",
+        "home": "LASK",
+        "away": "\u0160K Slovan Bratislava",
+        "esito": "LASK",
+        "prob": 80.8,
+        "status": "active"
     }
 }
