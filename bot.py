@@ -112,7 +112,7 @@ def get_active_football_sports_today():
 
 # ================= CONTROLLI STATISTICI AVANZATI E GRATUITI =================
 
-def check_soccer_form(sport, team_name):
+def check_soccer_advanced(sport, team_name):
     """Controlla forma e Differenza Reti tramite Football-Data.org"""
     if not FOOTBALL_DATA_KEY:
         return True, "Forma N/A (Key mancante)"
@@ -187,7 +187,7 @@ def check_nba_form(team_name):
                     for competitor in comp.get("competitors", []):
                         played_team = competitor.get("team", {}).get("displayName", "")
                         if team_name.lower() in played_team.lower() or played_team.lower() in team_name.lower():
-                            return False, f"B2B Rischio Stanchezza (Ha giocato anche ieri!) | {form_info}"
+                            return False, f"B2B Rischio Stanchezza (Ha giocato ieri!) | {form_info}"
 
         return True, form_info
     except Exception as e:
@@ -220,7 +220,7 @@ def check_nhl_form(team_name):
 # ==============================================================================
 
 def run_bot_cycle(tracked_bets):
-    print("🔄 Avvio ciclo intelligente multi-sport con controlli statistici avanzati...")
+    print("🔄 Avvio ciclo intelligente multi-sport con controlli ottimizzati...")
     sports_to_check = get_active_football_sports_today()
 
     now_utc = datetime.now(timezone.utc)
@@ -290,16 +290,37 @@ def run_bot_cycle(tracked_bets):
 
                     bookmakers = match.get("bookmakers", [])
                     if bookmakers:
+                        # --- FILTRO MULTI-BOOKMAKER (Mappa quote per media di mercato) ---
+                        outcomes_map = {}
+                        for bookmaker in bookmakers:
+                            for out in bookmaker["markets"][0]["outcomes"]:
+                                name = out["name"]
+                                price = out["price"]
+                                if name not in outcomes_map:
+                                    outcomes_map[name] = []
+                                outcomes_map[name].append(price)
+
+                        # Usiamo il primo bookmaker come riferimento principale
                         book = bookmakers[0]["title"]
                         outcomes = bookmakers[0]["markets"][0]["outcomes"]
 
-                        # Calcolo probabilità di tutte le opzioni per filtro equilibrio/derby
+                        # Calcolo probabilità con controllo quote anomale/stale
                         probs_dict = {}
                         for out in outcomes:
-                            p = round(((1 / out["price"]) * 100) + 4.5, 1)
-                            probs_dict[out["name"]] = min(p, 95.0)
+                            name = out["name"]
+                            price = out["price"]
+                            
+                            # Evita quote "stale" o troppo sballate rispetto alla media di mercato
+                            if name in outcomes_map and len(outcomes_map[name]) > 1:
+                                avg_price = sum(outcomes_map[name]) / len(outcomes_map[name])
+                                if price > avg_price * 1.15:
+                                    print(f"⚠️ Scartata quota anomala/stale per {name} in {home} vs {away}")
+                                    continue
 
-                        # Filtro Anti-Derby / Equilibrato: se la differenza tra le due opzioni principali è < 15%
+                            p = round(((1 / price) * 100) + 4.5, 1)
+                            probs_dict[name] = min(p, 95.0)
+
+                        # Filtro Anti-Derby / Equilibrato
                         if len(probs_dict) >= 2:
                             sorted_p = sorted(probs_dict.values(), reverse=True)
                             if (sorted_p[0] - sorted_p[1]) < 15.0:
@@ -308,10 +329,12 @@ def run_bot_cycle(tracked_bets):
 
                         for out in outcomes:
                             name = out["name"]
+                            if name not in probs_dict:
+                                continue
                             price = out["price"]
                             calculated_prob = probs_dict[name]
 
-                            # Soglia base del 65%, oppure 70% se gioca in Trasferta (Fattore Campo)
+                            # Soglia base del 65% (Casa), 70% (Trasferta)
                             is_away_team = (name == away)
                             min_prob_required = 70.0 if is_away_team else 65.0
 
@@ -324,7 +347,7 @@ def run_bot_cycle(tracked_bets):
                                 if target_team:
                                     print(f"🔍 Controllo avanzato per [{sport}]: {target_team}...")
                                     if "soccer" in sport:
-                                        form_ok, form_info = check_soccer_form(sport, target_team)
+                                        form_ok, form_info = check_soccer_advanced(sport, target_team)
                                     elif "basketball_nba" in sport:
                                         form_ok, form_info = check_nba_form(target_team)
                                     elif "icehockey_nhl" in sport:
@@ -339,7 +362,7 @@ def run_bot_cycle(tracked_bets):
 
                                 msg = (
                                     "----------------------------------------\n"
-                                    "💎 [VALUE BET MULTISPORT VERIFICATA] 💎\n"
+                                    "💎 [VALUE BET OTTIMIZZATA & VERIFICATA] 💎\n"
                                     f"🏆 Sport: {sport.replace('_', ' ').upper()}\n"
                                     f"⚔️ Match: {home} vs {away}\n"
                                     f"⏰ Inizio: {formatted_time}\n"
@@ -367,7 +390,7 @@ def run_bot_cycle(tracked_bets):
 
 
 if __name__ == "__main__":
-    print(f"\n--- Esecuzione Ciclo Multi-Sport Bot: {datetime.now()} ---")
+    print(f"\n--- Esecuzione Ciclo Ottimizzato Bot: {datetime.now()} ---")
     tracked_bets = load_state()
     run_bot_cycle(tracked_bets)
     print("--- Esecuzione completata ---")
