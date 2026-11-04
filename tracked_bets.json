@@ -295,10 +295,10 @@
         "prob": 65.1,
         "status": "active"
     },
-    "Real BetisvsM\u00e1laga": {
+    "Real BetisvsMálaga": {
         "sport": "soccer_spain_la_liga",
         "home": "Real Betis",
-        "away": "M\u00e1laga",
+        "away": "Málaga",
         "esito": "Real Betis",
         "prob": 80.3,
         "status": "active"
@@ -511,20 +511,44 @@
         "prob": 79.1,
         "status": "active"
     },
-    "Bod\u00f8/GlimtvsLille": {
+    "Bodø/GlimtvsLille": {
         "sport": "soccer_uefa_champs_league",
-        "home": "Bod\u00f8/Glimt",
+        "home": "Bodø/Glimt",
         "away": "Lille",
-        "esito": "Bod\u00f8/Glimt",
+        "esito": "Bodø/Glimt",
         "prob": 67.0,
         "status": "active"
     },
-    "LASKvs\u0160K Slovan Bratislava": {
+    "LASKvsŠK Slovan Bratislava": {
         "sport": "soccer_uefa_champs_league",
         "home": "LASK",
-        "away": "\u0160K Slovan Bratislava",
+        "away": "ŠK Slovan Bratislava",
         "esito": "LASK",
         "prob": 80.8,
+        "status": "active"
+    },
+    "FenerbahcevsLiverpool": {
+        "sport": "soccer_uefa_champs_league",
+        "home": "Fenerbahce",
+        "away": "Liverpool",
+        "esito": "Liverpool",
+        "prob": 77.0,
+        "status": "active"
+    },
+    "RBLeipzigvsManchesterCity": {
+        "sport": "soccer_uefa_champs_league",
+        "home": "RB Leipzig",
+        "away": "Manchester City",
+        "esito": "Manchester City",
+        "prob": 73.5,
+        "status": "active"
+    },
+    "VikingFKvsSabahFK": {
+        "sport": "soccer_uefa_champs_league",
+        "home": "Viking FK",
+        "away": "Sabah FK",
+        "esito": "Viking FK",
+        "prob": 80.3,
         "status": "active"
     }
 }
