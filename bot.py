@@ -30,7 +30,7 @@ ALWAYS_ACTIVE_SPORTS = ["basketball_nba", "icehockey_nhl"]
 def load_state():
     if os.path.exists(STATE_FILE):
         try:
-            with open(STATE_FILE, "r") as f:
+            with open(STATE_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
             return {}
@@ -38,18 +38,34 @@ def load_state():
 
 
 def save_state(state):
-    with open(STATE_FILE, "w") as f:
-        json.dump(state, f, indent=4)
+    try:
+        with open(STATE_FILE, "w", encoding="utf-8") as f:
+            json.dump(state, f, indent=4, ensure_ascii=False)
+    except Exception as e:
+        print(f"⚠️ Errore nel salvataggio dello stato: {e}")
+
+
+def get_existing_key(tracked_bets, home, away):
+    """Cerca la chiave nel dizionario ignorando spazi e underscore per compatibilità con il JSON"""
+    target = f"{home}vs{away}".replace(" ", "").replace("_", "").lower()
+    for key in tracked_bets.keys():
+        normalized_key = key.replace(" ", "").replace("_", "").lower()
+        if normalized_key == target:
+            return key
+    return f"{home}vs{away}".replace(" ", "")
 
 
 def send_discord_alert(message):
+    if not DISCORD_WEBHOOK_URL:
+        print("⚠️ DISCORD_WEBHOOK_URL non configurato. Messaggio non inviato.")
+        return
     payload = {"content": message}
     try:
-        response = requests.post(DISCORD_WEBHOOK_URL, json=payload)
+        response = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=10)
         if response.status_code == 204:
             print("📲 Notifica inviata con successo su Discord!")
         else:
-            print(f"Errore Discord: {response.text}")
+            print(f"Errore Discord (Codice {response.status_code}): {response.text}")
     except Exception as e:
         print(f"Errore di rete Discord: {e}")
 
@@ -88,7 +104,7 @@ def get_active_football_sports_today():
     headers = {"X-Auth-Token": FOOTBALL_DATA_KEY}
 
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=10)
         if response.status_code == 200:
             data = response.json()
             matches = data.get("matches", [])
@@ -110,7 +126,7 @@ def get_active_football_sports_today():
     return list(active_sports)
 
 
-# ================= CONTROLLI STATISTICI AVANZATI E GRATUITI =================
+# ================= CONTROLLI STATISTICI AVANZATI =================
 
 def check_soccer_advanced(sport, team_name):
     """Controlla forma e Differenza Reti tramite Football-Data.org"""
@@ -130,7 +146,7 @@ def check_soccer_advanced(sport, team_name):
     headers = {"X-Auth-Token": FOOTBALL_DATA_KEY}
 
     try:
-        res = requests.get(url, headers=headers)
+        res = requests.get(url, headers=headers, timeout=10)
         if res.status_code == 200:
             data = res.json()
             for table_group in data.get("standings", []):
@@ -142,11 +158,9 @@ def check_soccer_advanced(sport, team_name):
                             position = row.get("position", 0)
                             goal_diff = row.get("goalDifference", 0)
 
-                            # 1. Scarta se troppe sconfitte recenti (3 o più)
                             if form and form.count("L") >= 3:
                                 return False, f"Forma rischiosa (Ultime 5: {form}, Pos: {position}°)"
 
-                            # 2. Scarta se la differenza reti in classifica è negativa o pari a 0
                             if goal_diff <= 0:
                                 return False, f"Diff. Reti insufficiente ({goal_diff} gol, Pos: {position}°)"
 
@@ -157,11 +171,10 @@ def check_soccer_advanced(sport, team_name):
 
 
 def check_nba_form(team_name):
-    """Controlla record e il filtro Back-to-Back (partite consecutive) via ESPN API"""
+    """Controlla record e il filtro Back-to-Back tramite ESPN API"""
     url_standings = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/standings"
     form_info = "NBA Form OK"
     try:
-        # Controllo Record
         res = requests.get(url_standings, timeout=5)
         if res.status_code == 200:
             data = res.json()
@@ -169,14 +182,13 @@ def check_nba_form(team_name):
                 for standing in group.get("standings", []):
                     for entry in standing.get("entries", []):
                         t_name = entry.get("team", {}).get("displayName", "")
-                        if team_name.lower() in t_name.lower() or t_name.lower() in team_name.lower():
+                        if team_name.lower() in t_name.lower() or t_name.lower() in t_name.lower():
                             stats = entry.get("stats", [])
                             for stat in stats:
                                 if stat.get("name") == "overall":
                                     record = stat.get("displayValue", "N/A")
                                     form_info = f"NBA Record: {record}"
 
-        # Controllo Back-to-Back (Partita giocata ieri)
         yesterday_str = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y%m%d")
         url_scoreboard = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates={yesterday_str}"
         res_sb = requests.get(url_scoreboard, timeout=5)
@@ -196,7 +208,7 @@ def check_nba_form(team_name):
 
 
 def check_nhl_form(team_name):
-    """Controlla record e statistiche NHL tramite API ufficiale gratuita"""
+    """Controlla record e statistiche NHL tramite API ufficiale"""
     url = "https://api-web.nhle.com/v1/standings/now"
     try:
         res = requests.get(url, timeout=5)
@@ -239,154 +251,167 @@ def run_bot_cycle(tracked_bets):
             "commenceTimeTo": end_of_day,
         }
         try:
-            res = requests.get(url, params=params)
-            if res.status_code == 200:
-                data = res.json()
+            res = requests.get(url, params=params, timeout=10)
+            if res.status_code != 200:
+                print(f"⚠️ Errore Odds API per {sport}: Codice {res.status_code}")
+                continue
+            
+            data = res.json()
+            if not isinstance(data, list):
+                continue
 
-                # 1. MONITORAGGIO BET GIÀ SALVATE (REVOCA SE SCENDE SOTTO IL 65%)
-                for match in data:
-                    home = match["home_team"]
-                    away = match["away_team"]
-                    match_key = f"{home}vs{away}"
+            # 1. MONITORAGGIO BET GIÀ SALVATE
+            for match in data:
+                home = match.get("home_team")
+                away = match.get("away_team")
+                if not home or not away:
+                    continue
+                
+                # Trova la chiave esistente senza rompere il formato del JSON
+                match_key = get_existing_key(tracked_bets, home, away)
 
-                    if match_key in tracked_bets and tracked_bets[match_key]["status"] == "active":
-                        bookmakers = match.get("bookmakers", [])
-                        if bookmakers:
-                            outcomes = bookmakers[0]["markets"][0]["outcomes"]
-                            for out in outcomes:
-                                if out["name"] == tracked_bets[match_key]["esito"]:
-                                    current_price = out["price"]
-                                    implied_prob = (1 / current_price) * 100
-                                    current_prob = round(implied_prob + 4.5, 1)
-                                    if current_prob > 95:
-                                        current_prob = 95.0
-
-                                    if current_prob < 65.0:
-                                        msg = (
-                                            "----------------------------------------\n"
-                                            "🛑 [STOP SCOMMESSA / REVOCA VALUE BET] 🛑\n"
-                                            f"⚔️ Match: {home} vs {away}\n"
-                                            f"🎯 Esito Precedente: {tracked_bets[match_key]['esito']}\n"
-                                            f"📊 Nuova Probabilità: {current_prob}%\n"
-                                            "❌ CONSIGLIO: NON SCOMMETTERE PIÙ O CHIUDI LA POSIZIONE!"
-                                        )
-                                        send_discord_alert(msg)
-                                        tracked_bets[match_key]["status"] = "revoked"
-                                        save_state(tracked_bets)
-                                        time.sleep(1)
-
-                # 2. RICERCA NUOVE VALUE BET
-                for match in data:
-                    commence_time = match.get("commence_time", "")
-                    if commence_time and not commence_time.startswith(today_str):
-                        continue
-
-                    home = match["home_team"]
-                    away = match["away_team"]
-                    match_key = f"{home}vs{away}"
-
-                    if match_key in tracked_bets:
-                        continue
-
+                if match_key in tracked_bets and tracked_bets[match_key]["status"] == "active":
                     bookmakers = match.get("bookmakers", [])
-                    if bookmakers:
-                        # --- FILTRO MULTI-BOOKMAKER (Mappa quote per media di mercato) ---
-                        outcomes_map = {}
-                        for bookmaker in bookmakers:
-                            for out in bookmaker["markets"][0]["outcomes"]:
-                                name = out["name"]
-                                price = out["price"]
-                                if name not in outcomes_map:
-                                    outcomes_map[name] = []
-                                outcomes_map[name].append(price)
-
-                        # Usiamo il primo bookmaker come riferimento principale
-                        book = bookmakers[0]["title"]
-                        outcomes = bookmakers[0]["markets"][0]["outcomes"]
-
-                        # Calcolo probabilità con controllo quote anomale/stale
-                        probs_dict = {}
+                    if bookmakers and "markets" in bookmakers[0]:
+                        outcomes = bookmakers[0]["markets"][0].get("outcomes", [])
                         for out in outcomes:
-                            name = out["name"]
-                            price = out["price"]
-                            
-                            # Evita quote "stale" o troppo sballate rispetto alla media di mercato
-                            if name in outcomes_map and len(outcomes_map[name]) > 1:
-                                avg_price = sum(outcomes_map[name]) / len(outcomes_map[name])
-                                if price > avg_price * 1.15:
-                                    print(f"⚠️ Scartata quota anomala/stale per {name} in {home} vs {away}")
+                            if out.get("name") == tracked_bets[match_key]["esito"]:
+                                current_price = out.get("price")
+                                if not current_price:
                                     continue
+                                implied_prob = (1 / current_price) * 100
+                                current_prob = round(implied_prob + 4.5, 1)
+                                if current_prob > 95:
+                                    current_prob = 95.0
 
-                            p = round(((1 / price) * 100) + 4.5, 1)
-                            probs_dict[name] = min(p, 95.0)
+                                if current_prob < 65.0:
+                                    msg = (
+                                        "----------------------------------------\n"
+                                        "🛑 [STOP SCOMMESSA / REVOCA VALUE BET] 🛑\n"
+                                        f"⚔️ Match: {home} vs {away}\n"
+                                        f"🎯 Esito Precedente: {tracked_bets[match_key]['esito']}\n"
+                                        f"📊 Nuova Probabilità: {current_prob}%\n"
+                                        "❌ CONSIGLIO: NON SCOMMETTERE PIÙ O CHIUDI LA POSIZIONE!"
+                                    )
+                                    send_discord_alert(msg)
+                                    tracked_bets[match_key]["status"] = "revoked"
+                                    save_state(tracked_bets)
+                                    time.sleep(1)
 
-                        # Filtro Anti-Derby / Equilibrato
-                        if len(probs_dict) >= 2:
-                            sorted_p = sorted(probs_dict.values(), reverse=True)
-                            if (sorted_p[0] - sorted_p[1]) < 15.0:
-                                print(f"⚠️ Scartata {home} vs {away}: Scontro troppo equilibrato/Derby.")
+            # 2. RICERCA NUOVE VALUE BET
+            for match in data:
+                commence_time = match.get("commence_time", "")
+                if commence_time and not commence_time.startswith(today_str):
+                    continue
+
+                home = match.get("home_team")
+                away = match.get("away_team")
+                if not home or not away:
+                    continue
+                
+                match_key = get_existing_key(tracked_bets, home, away)
+
+                if match_key in tracked_bets:
+                    continue
+
+                bookmakers = match.get("bookmakers", [])
+                if bookmakers and "markets" in bookmakers[0]:
+                    outcomes_map = {}
+                    for bookmaker in bookmakers:
+                        markets = bookmaker.get("markets", [])
+                        if markets:
+                            for out in markets[0].get("outcomes", []):
+                                name = out.get("name")
+                                price = out.get("price")
+                                if name and price:
+                                    if name not in outcomes_map:
+                                        outcomes_map[name] = []
+                                    outcomes_map[name].append(price)
+
+                    book = bookmakers[0].get("title", "Bookmaker")
+                    outcomes = bookmakers[0]["markets"][0].get("outcomes", [])
+
+                    probs_dict = {}
+                    for out in outcomes:
+                        name = out.get("name")
+                        price = out.get("price")
+                        if not name or not price:
+                            continue
+                        
+                        if name in outcomes_map and len(outcomes_map[name]) > 1:
+                            avg_price = sum(outcomes_map[name]) / len(outcomes_map[name])
+                            if price > avg_price * 1.15:
+                                print(f"⚠️ Scartata quota anomala/stale per {name} in {home} vs {away}")
                                 continue
 
-                        for out in outcomes:
-                            name = out["name"]
-                            if name not in probs_dict:
+                        p = round(((1 / price) * 100) + 4.5, 1)
+                        probs_dict[name] = min(p, 95.0)
+
+                    if len(probs_dict) >= 2:
+                        sorted_p = sorted(probs_dict.values(), reverse=True)
+                        if (sorted_p[0] - sorted_p[1]) < 15.0:
+                            print(f"⚠️ Scartata {home} vs {away}: Scontro troppo equilibrato/Derby.")
+                            continue
+
+                    for out in outcomes:
+                        name = out.get("name")
+                        if name not in probs_dict:
+                            continue
+                        price = out.get("price")
+                        calculated_prob = probs_dict[name]
+
+                        is_away_team = (name == away)
+                        min_prob_required = 70.0 if is_away_team else 65.0
+
+                        if price > 1.29 and calculated_prob >= min_prob_required:
+                            target_team = home if name == home else (away if name == away else None)
+
+                            form_ok = True
+                            form_info = "N/A"
+
+                            if target_team:
+                                print(f"🔍 Controllo avanzato per [{sport}]: {target_team}...")
+                                if "soccer" in sport:
+                                    form_ok, form_info = check_soccer_advanced(sport, target_team)
+                                elif "basketball_nba" in sport:
+                                    form_ok, form_info = check_nba_form(target_team)
+                                elif "icehockey_nhl" in sport:
+                                    form_ok, form_info = check_nhl_form(target_team)
+
+                            if not form_ok:
+                                print(f"⚠️ Scartata {home} vs {away} per filtro statistico: {form_info}")
                                 continue
-                            price = out["price"]
-                            calculated_prob = probs_dict[name]
 
-                            # Soglia base del 65% (Casa), 70% (Trasferta)
-                            is_away_team = (name == away)
-                            min_prob_required = 70.0 if is_away_team else 65.0
+                            formatted_time = format_match_time(commence_time)
+                            recommended_stake = calculate_stake(calculated_prob)
 
-                            if price > 1.29 and calculated_prob >= min_prob_required:
-                                target_team = home if name == home else (away if name == away else None)
+                            msg = (
+                                "----------------------------------------\n"
+                                "💎 [VALUE BET OTTIMIZZATA & VERIFICATA] 💎\n"
+                                f"🏆 Sport: {sport.replace('_', ' ').upper()}\n"
+                                f"⚔️ Match: {home} vs {away}\n"
+                                f"⏰ Inizio: {formatted_time}\n"
+                                f"🎯 Esito Consigliato: {name} {'(Trasferta)' if is_away_team else '(Casa)'}\n"
+                                f"💰 Quota: {price} ({book})\n"
+                                f"📊 Probabilità Stimata: {calculated_prob}%\n"
+                                f"💵 Stake Consigliato: **{recommended_stake}**\n"
+                                f"📈 Dettagli: {form_info}\n"
+                                "✅ Tutti i Filtri Superati con Successo!"
+                            )
+                            send_discord_alert(msg)
 
-                                form_ok = True
-                                form_info = "N/A"
-
-                                if target_team:
-                                    print(f"🔍 Controllo avanzato per [{sport}]: {target_team}...")
-                                    if "soccer" in sport:
-                                        form_ok, form_info = check_soccer_advanced(sport, target_team)
-                                    elif "basketball_nba" in sport:
-                                        form_ok, form_info = check_nba_form(target_team)
-                                    elif "icehockey_nhl" in sport:
-                                        form_ok, form_info = check_nhl_form(target_team)
-
-                                if not form_ok:
-                                    print(f"⚠️ Scartata {home} vs {away} per filtro statistico: {form_info}")
-                                    continue
-
-                                formatted_time = format_match_time(commence_time)
-                                recommended_stake = calculate_stake(calculated_prob)
-
-                                msg = (
-                                    "----------------------------------------\n"
-                                    "💎 [VALUE BET OTTIMIZZATA & VERIFICATA] 💎\n"
-                                    f"🏆 Sport: {sport.replace('_', ' ').upper()}\n"
-                                    f"⚔️ Match: {home} vs {away}\n"
-                                    f"⏰ Inizio: {formatted_time}\n"
-                                    f"🎯 Esito Consigliato: {name} {'(Trasferta)' if is_away_team else '(Casa)'}\n"
-                                    f"💰 Quota: {price} ({book})\n"
-                                    f"📊 Probabilità Stimata: {calculated_prob}%\n"
-                                    f"💵 Stake Consigliato: **{recommended_stake}**\n"
-                                    f"📈 Dettagli: {form_info}\n"
-                                    "✅ Tutti i Filtri Superati con Successo!"
-                                )
-                                send_discord_alert(msg)
-
-                                tracked_bets[match_key] = {
-                                    "sport": sport,
-                                    "home": home,
-                                    "away": away,
-                                    "esito": name,
-                                    "prob": calculated_prob,
-                                    "status": "active",
-                                }
-                                save_state(tracked_bets)
-                                time.sleep(1)
+                            tracked_bets[match_key] = {
+                                "sport": sport,
+                                "home": home,
+                                "away": away,
+                                "esito": name,
+                                "prob": calculated_prob,
+                                "status": "active",
+                            }
+                            save_state(tracked_bets)
+                            time.sleep(1)
         except Exception as e:
-            print(f"Errore controllo per {sport}: {e}")
+            print(f"Errore generale nel controllo per {sport}: {e}")
 
 
 if __name__ == "__main__":
