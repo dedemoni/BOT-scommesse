@@ -182,7 +182,7 @@ def check_nba_form(team_name):
                 for standing in group.get("standings", []):
                     for entry in standing.get("entries", []):
                         t_name = entry.get("team", {}).get("displayName", "")
-                        if team_name.lower() in t_name.lower() or t_name.lower() in t_name.lower():
+                        if team_name.lower() in t_name.lower() or t_name.lower() in team_name.lower():
                             stats = entry.get("stats", [])
                             for stat in stats:
                                 if stat.get("name") == "overall":
@@ -235,10 +235,16 @@ def run_bot_cycle(tracked_bets):
     print("🔄 Avvio ciclo intelligente multi-sport con controlli ottimizzati...")
     sports_to_check = get_active_football_sports_today()
 
-    now_utc = datetime.now(timezone.utc)
-    start_of_day = now_utc.replace(hour=0, minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
-    end_of_day = now_utc.replace(hour=23, minute=59, second=59, microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
-    today_str = now_utc.strftime("%Y-%m-%d")
+    # Gestione fuso orario italiano e finestra temporale estesa alla notte (fino alle 07:00 del giorno dopo)
+    italy_tz = ZoneInfo("Europe/Rome")
+    now_local = datetime.now(italy_tz)
+    
+    start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_local = start_local + timedelta(hours=31) 
+
+    start_of_day = start_local.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    end_of_day = end_local.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    today_local_str = start_local.strftime("%Y-%m-%d")
 
     for sport in sports_to_check:
         url = f"https://api.the-odds-api.com/v4/sports/{sport}/odds/"
@@ -267,7 +273,6 @@ def run_bot_cycle(tracked_bets):
                 if not home or not away:
                     continue
                 
-                # Trova la chiave esistente senza rompere il formato del JSON
                 match_key = get_existing_key(tracked_bets, home, away)
 
                 if match_key in tracked_bets and tracked_bets[match_key]["status"] == "active":
@@ -301,7 +306,18 @@ def run_bot_cycle(tracked_bets):
             # 2. RICERCA NUOVE VALUE BET
             for match in data:
                 commence_time = match.get("commence_time", "")
-                if commence_time and not commence_time.startswith(today_str):
+                if not commence_time:
+                    continue
+                
+                # Conversione dell'orario in ora italiana per verificare che appartenga alla giornata corrente
+                try:
+                    dt_utc = datetime.fromisoformat(commence_time.replace("Z", "+00:00"))
+                    dt_local = dt_utc.astimezone(italy_tz)
+                    match_date_str = dt_local.strftime("%Y-%m-%d")
+                except Exception:
+                    continue
+
+                if match_date_str != today_local_str:
                     continue
 
                 home = match.get("home_team")
