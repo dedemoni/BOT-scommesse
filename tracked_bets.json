@@ -550,5 +550,53 @@
         "esito": "Viking FK",
         "prob": 80.3,
         "status": "active"
+    },
+    "ACMilanvsFerencvárosTC": {
+        "sport": "soccer_uefa_europa_league",
+        "home": "AC Milan",
+        "away": "Ferencváros TC",
+        "esito": "AC Milan",
+        "prob": 79.1,
+        "status": "active"
+    },
+    "RealSociedadvsLyon": {
+        "sport": "soccer_uefa_europa_league",
+        "home": "Real Sociedad",
+        "away": "Lyon",
+        "esito": "Real Sociedad",
+        "prob": 73.5,
+        "status": "active"
+    },
+    "NECNijmegenvsOmonoiaFC": {
+        "sport": "soccer_uefa_europa_league",
+        "home": "NEC Nijmegen",
+        "away": "Omonoia FC",
+        "esito": "NEC Nijmegen",
+        "prob": 66.2,
+        "status": "active"
+    },
+    "SunderlandvsDinamoZagreb": {
+        "sport": "soccer_uefa_europa_league",
+        "home": "Sunderland",
+        "away": "Dinamo Zagreb",
+        "esito": "Sunderland",
+        "prob": 77.0,
+        "status": "active"
+    },
+    "TorreensevsFCArarat-Armenia": {
+        "sport": "soccer_uefa_europa_league",
+        "home": "Torreense",
+        "away": "FC Ararat-Armenia",
+        "esito": "Torreense",
+        "prob": 67.0,
+        "status": "active"
+    },
+    "SKSturmGrazvsNKCelje": {
+        "sport": "soccer_uefa_europa_league",
+        "home": "SK Sturm Graz",
+        "away": "NK Celje",
+        "esito": "SK Sturm Graz",
+        "prob": 69.9,
+        "status": "active"
     }
 }
