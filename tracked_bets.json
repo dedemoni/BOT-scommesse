@@ -557,7 +557,7 @@
         "away": "Ferencváros TC",
         "esito": "AC Milan",
         "prob": 79.1,
-        "status": "active"
+        "status": "revoked"
     },
     "RealSociedadvsLyon": {
         "sport": "soccer_uefa_europa_league",
@@ -573,7 +573,7 @@
         "away": "Omonoia FC",
         "esito": "NEC Nijmegen",
         "prob": 66.2,
-        "status": "active"
+        "status": "revoked"
     },
     "SunderlandvsDinamoZagreb": {
         "sport": "soccer_uefa_europa_league",
