@@ -365,7 +365,7 @@ def run_bot_cycle(tracked_bets):
 
                     if len(probs_dict) >= 2:
                         sorted_p = sorted(probs_dict.values(), reverse=True)
-                        if (sorted_p[0] - sorted_p[1]) < 15.0:
+                        if (sorted_p[0] - sorted_p[1]) < 12.0:
                             print(f"⚠️ Scartata {home} vs {away}: Scontro troppo equilibrato/Derby.")
                             continue
 
