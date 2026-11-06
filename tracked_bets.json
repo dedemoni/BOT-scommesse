@@ -598,5 +598,13 @@
         "esito": "SK Sturm Graz",
         "prob": 69.9,
         "status": "active"
+    },
+    "EvertonvsCoventryCity": {
+        "sport": "soccer_epl",
+        "home": "Everton",
+        "away": "Coventry City",
+        "esito": "Everton",
+        "prob": 68.6,
+        "status": "active"
     }
 }
