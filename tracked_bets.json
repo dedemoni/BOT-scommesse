@@ -606,5 +606,53 @@
         "esito": "Everton",
         "prob": 68.6,
         "status": "active"
+    },
+    "ASRomavsSassuolo": {
+        "sport": "soccer_italy_serie_a",
+        "home": "AS Roma",
+        "away": "Sassuolo",
+        "esito": "AS Roma",
+        "prob": 79.7,
+        "status": "active"
+    },
+    "RBLeipzigvsAugsburg": {
+        "sport": "soccer_germany_bundesliga",
+        "home": "RB Leipzig",
+        "away": "Augsburg",
+        "esito": "RB Leipzig",
+        "prob": 73.9,
+        "status": "active"
+    },
+    "BorussiaDortmundvsElversberg": {
+        "sport": "soccer_germany_bundesliga",
+        "home": "Borussia Dortmund",
+        "away": "Elversberg",
+        "esito": "Borussia Dortmund",
+        "prob": 79.7,
+        "status": "active"
+    },
+    "InterMiamiCFvsCharlotteFC": {
+        "sport": "soccer_usa_mls",
+        "home": "Inter Miami CF",
+        "away": "Charlotte FC",
+        "esito": "Inter Miami CF",
+        "prob": 80.3,
+        "status": "active"
+    },
+    "PhiladelphiaUnionvsTorontoFC": {
+        "sport": "soccer_usa_mls",
+        "home": "Philadelphia Union",
+        "away": "Toronto FC",
+        "esito": "Philadelphia Union",
+        "prob": 72.5,
+        "status": "active"
+    },
+    "IndianaPacersvsDenverNuggets": {
+        "sport": "basketball_nba",
+        "home": "Indiana Pacers",
+        "away": "Denver Nuggets",
+        "esito": "Denver Nuggets",
+        "prob": 78.6,
+        "status": "active"
     }
 }
