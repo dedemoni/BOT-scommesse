@@ -654,5 +654,45 @@
         "esito": "Denver Nuggets",
         "prob": 78.6,
         "status": "active"
+    },
+    "VillarrealvsGetafe": {
+        "sport": "soccer_spain_la_liga",
+        "home": "Villarreal",
+        "away": "Getafe",
+        "esito": "Villarreal",
+        "prob": 70.3,
+        "status": "active"
+    },
+    "SCFreiburgvsUnionBerlin": {
+        "sport": "soccer_germany_bundesliga",
+        "home": "SC Freiburg",
+        "away": "Union Berlin",
+        "esito": "SC Freiburg",
+        "prob": 73.0,
+        "status": "active"
+    },
+    "TSGHoffenheimvsFCSchalke04": {
+        "sport": "soccer_germany_bundesliga",
+        "home": "TSG Hoffenheim",
+        "away": "FC Schalke 04",
+        "esito": "TSG Hoffenheim",
+        "prob": 66.6,
+        "status": "active"
+    },
+    "AngersvsNice": {
+        "sport": "soccer_france_ligue_one",
+        "home": "Angers",
+        "away": "Nice",
+        "esito": "Nice",
+        "prob": 78.6,
+        "status": "active"
+    },
+    "LeHavrevsLorient": {
+        "sport": "soccer_france_ligue_one",
+        "home": "Le Havre",
+        "away": "Lorient",
+        "esito": "Lorient",
+        "prob": 73.9,
+        "status": "active"
     }
 }
