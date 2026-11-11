@@ -319,7 +319,7 @@ def run_bot_cycle(tracked_bets):
     today_local_str = start_local.strftime("%Y-%m-%d")
 
     for sport in sports_to_check:
-        url = f"[https://api.the-odds-api.com/v4/sports/](https://api.the-odds-api.com/v4/sports/){sport}/odds/"
+        url = f"https://api.the-odds-api.com/v4/sports/{sport}/odds/"
         params = {
             "api_key": ODDS_API_KEY,
             "regions": "eu",
