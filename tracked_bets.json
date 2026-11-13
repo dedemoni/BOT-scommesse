@@ -694,5 +694,45 @@
         "esito": "Lorient",
         "prob": 73.9,
         "status": "active"
+    },
+    "IndianaPacersvsNewYorkKnicks": {
+        "sport": "basketball_nba",
+        "home": "Indiana Pacers",
+        "away": "New York Knicks",
+        "esito": "New York Knicks",
+        "prob": 80.3,
+        "status": "active"
+    },
+    "ChicagoBullsvsAtlantaHawks": {
+        "sport": "basketball_nba",
+        "home": "Chicago Bulls",
+        "away": "Atlanta Hawks",
+        "esito": "Atlanta Hawks",
+        "prob": 76.4,
+        "status": "active"
+    },
+    "MiamiHeatvsClevelandCavaliers": {
+        "sport": "basketball_nba",
+        "home": "Miami Heat",
+        "away": "Cleveland Cavaliers",
+        "esito": "Miami Heat",
+        "prob": 65.5,
+        "status": "active"
+    },
+    "LosAngelesClippersvsOklahomaCityThunder": {
+        "sport": "basketball_nba",
+        "home": "Los Angeles Clippers",
+        "away": "Oklahoma City Thunder",
+        "esito": "Oklahoma City Thunder",
+        "prob": 78.0,
+        "status": "active"
+    },
+    "CarolinaHurricanesvsSeattleKraken": {
+        "sport": "icehockey_nhl",
+        "home": "Carolina Hurricanes",
+        "away": "Seattle Kraken",
+        "esito": "Carolina Hurricanes",
+        "prob": 75.4,
+        "status": "active"
     }
 }
