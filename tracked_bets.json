@@ -734,5 +734,13 @@
         "esito": "Carolina Hurricanes",
         "prob": 75.4,
         "status": "active"
+    },
+    "Philadelphia76ersvsIndianaPacers": {
+        "sport": "basketball_nba",
+        "home": "Philadelphia 76ers",
+        "away": "Indiana Pacers",
+        "esito": "Philadelphia 76ers",
+        "prob": 73.9,
+        "status": "active"
     }
 }
