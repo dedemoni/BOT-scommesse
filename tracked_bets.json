@@ -742,5 +742,13 @@
         "esito": "Philadelphia 76ers",
         "prob": 73.9,
         "status": "active"
+    },
+    "VegasGoldenKnightsvsDallasStars": {
+        "sport": "icehockey_nhl",
+        "home": "Vegas Golden Knights",
+        "away": "Dallas Stars",
+        "esito": "Vegas Golden Knights",
+        "prob": 72.5,
+        "status": "active"
     }
 }
