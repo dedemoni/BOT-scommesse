@@ -749,6 +749,14 @@
         "away": "Dallas Stars",
         "esito": "Vegas Golden Knights",
         "prob": 72.5,
+        "status": "revoked"
+    },
+    "UtahMammothvsColoradoAvalanche": {
+        "sport": "icehockey_nhl",
+        "home": "Utah Mammoth",
+        "away": "Colorado Avalanche",
+        "esito": "Utah Mammoth",
+        "prob": 73.0,
         "status": "active"
     }
 }
