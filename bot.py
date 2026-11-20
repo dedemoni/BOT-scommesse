@@ -1,21 +1,21 @@
 from datetime import datetime, timezone, timedelta
 import json
 import os
+import re
 import time
 import requests
 from zoneinfo import ZoneInfo
-from google import genai  # SDK ufficiale Google GenAI
+from google import genai
+from google.genai import types
 
 # ================= CONFIGURAZIONE DA GITHUB SECRETS =================
 ODDS_API_KEY = os.environ.get("ODDS_API_KEY")
-FOOTBALL_DATA_KEY = os.environ.get("FOOTBALL_DATA_KEY")
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")  # Necessario per l'analisi avanzata
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 STATE_FILE = "tracked_bets.json"
 # ====================================================================
 
-# Inizializzazione client Gemini
-client = genai.Client()
+client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
 LEAGUE_MAPPING = {
     "SA": "soccer_italy_serie_a",
@@ -30,6 +30,7 @@ LEAGUE_MAPPING = {
 }
 
 ALWAYS_ACTIVE_SPORTS = ["basketball_nba", "icehockey_nhl"]
+SEARCH_TOOLS = [{"google_search": {}}]
 
 
 def load_state():
@@ -51,7 +52,6 @@ def save_state(state):
 
 
 def get_existing_key(tracked_bets, home, away):
-    """Cerca la chiave nel dizionario ignorando spazi e underscore per compatibilità con il JSON"""
     target = f"{home}vs{away}".replace(" ", "").replace("_", "").lower()
     for key in tracked_bets.keys():
         normalized_key = key.replace(" ", "").replace("_", "").lower()
@@ -76,7 +76,6 @@ def send_discord_alert(message):
 
 
 def calculate_stake(prob):
-    """Calcola la puntata in frazioni di unità (max 1) basata sulla probabilità"""
     if prob >= 82.0:
         return "1/2 unità (0.50)"
     elif prob >= 76.0:
@@ -88,7 +87,6 @@ def calculate_stake(prob):
 
 
 def format_match_time(iso_time_str):
-    """Converte l'ora ISO UTC in orario locale italiano (Europe/Rome)"""
     try:
         dt_utc = datetime.fromisoformat(iso_time_str.replace("Z", "+00:00"))
         dt_local = dt_utc.astimezone(ZoneInfo("Europe/Rome"))
@@ -97,226 +95,329 @@ def format_match_time(iso_time_str):
         return iso_time_str
 
 
-def get_active_football_sports_today():
-    print("📅 Controllo calendario partite di calcio per oggi...")
-    active_sports = set(ALWAYS_ACTIVE_SPORTS)
-
-    if not FOOTBALL_DATA_KEY:
-        print("⚠️ FOOTBALL_DATA_KEY non trovata, procedo con tutti i campionati.")
-        return list(LEAGUE_MAPPING.values()) + ALWAYS_ACTIVE_SPORTS
-
-    url = "https://api.football-data.org/v4/matches"
-    headers = {"X-Auth-Token": FOOTBALL_DATA_KEY}
-
+def extract_json_dict(text: str) -> dict:
+    if not text:
+        return {}
+    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.IGNORECASE)
     try:
-        response = requests.get(url, headers=headers, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            matches = data.get("matches", [])
-            found_competitions = set()
-            for match in matches:
-                comp_code = match.get("competition", {}).get("code")
-                if comp_code in LEAGUE_MAPPING:
-                    found_competitions.add(LEAGUE_MAPPING[comp_code])
-            for sport in found_competitions:
-                active_sports.add(sport)
-            print(f"✅ Campionati di calcio attivi oggi trovati: {list(found_competitions)}")
-        else:
-            print(f"⚠️ Errore calendario (Codice {response.status_code}), procedo con tutti.")
-            return list(LEAGUE_MAPPING.values()) + ALWAYS_ACTIVE_SPORTS
-    except Exception as e:
-        print(f"⚠️ Errore di connessione al calendario: {e}, procedo con tutti.")
-        return list(LEAGUE_MAPPING.values()) + ALWAYS_ACTIVE_SPORTS
-
-    return list(active_sports)
+        parsed = json.loads(cleaned)
+        return parsed if isinstance(parsed, dict) else {}
+    except json.JSONDecodeError:
+        match = re.search(r"\{[\s\S]*\}", cleaned)
+        if match:
+            try:
+                parsed = json.loads(match.group(0))
+                return parsed if isinstance(parsed, dict) else {}
+            except json.JSONDecodeError:
+                return {}
+        return {}
 
 
-# ================= CONTROLLI STATISTICI AVANZATI & GEMINI =================
-
-def check_soccer_advanced(sport, team_name):
-    """Controlla forma e Differenza Reti tramite Football-Data.org"""
-    if not FOOTBALL_DATA_KEY:
-        return True, "Forma N/A (Key mancante)"
-
-    comp_code = None
-    for code, odds_name in LEAGUE_MAPPING.items():
-        if odds_name == sport:
-            comp_code = code
-            break
-
-    if not comp_code:
-        return True, "Forma N/A"
-
-    url = f"https://api.football-data.org/v4/competitions/{comp_code}/standings"
-    headers = {"X-Auth-Token": FOOTBALL_DATA_KEY}
-
+def extract_json_list(text: str) -> list:
+    if not text:
+        return []
+    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.IGNORECASE)
     try:
-        res = requests.get(url, headers=headers, timeout=10)
-        if res.status_code == 200:
-            data = res.json()
-            for table_group in data.get("standings", []):
-                if table_group.get("type") == "TOTAL":
-                    for row in table_group.get("table", []):
-                        current_team = row.get("team", {}).get("name", "")
-                        if team_name.lower() in current_team.lower() or current_team.lower() in team_name.lower():
-                            form = row.get("form", "")
-                            position = row.get("position", 0)
-                            goal_diff = row.get("goalDifference", 0)
-
-                            if form and form.count("L") >= 3:
-                                return False, f"Forma rischiosa (Ultime 5: {form}, Pos: {position}°)"
-
-                            if goal_diff <= 0:
-                                return False, f"Diff. Reti insufficiente ({goal_diff} gol, Pos: {position}°)"
-
-                            return True, f"Pos: {position}° | Diff.Reti: {goal_diff:+d} | Forma: {form if form else 'N/D'}"
-    except Exception as e:
-        print(f"Errore controllo calcio per {team_name}: {e}")
-    return True, "Forma non verificata"
-
-
-def check_nba_form(team_name):
-    """Controlla record e il filtro Back-to-Back tramite ESPN API"""
-    url_standings = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/standings"
-    form_info = "NBA Form OK"
-    try:
-        res = requests.get(url_standings, timeout=5)
-        if res.status_code == 200:
-            data = res.json()
-            for group in data.get("children", []):
-                for standing in group.get("standings", []):
-                    for entry in standing.get("entries", []):
-                        t_name = entry.get("team", {}).get("displayName", "")
-                        if team_name.lower() in t_name.lower() or t_name.lower() in team_name.lower():
-                            stats = entry.get("stats", [])
-                            for stat in stats:
-                                if stat.get("name") == "overall":
-                                    record = stat.get("displayValue", "N/A")
-                                    form_info = f"NBA Record: {record}"
-
-        yesterday_str = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y%m%d")
-        url_scoreboard = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates={yesterday_str}"
-        res_sb = requests.get(url_scoreboard, timeout=5)
-        if res_sb.status_code == 200:
-            sb_data = res_sb.json()
-            for event in sb_data.get("events", []):
-                for comp in event.get("competitions", []):
-                    for competitor in comp.get("competitors", []):
-                        played_team = competitor.get("team", {}).get("displayName", "")
-                        if team_name.lower() in played_team.lower() or played_team.lower() in team_name.lower():
-                            return False, f"B2B Rischio Stanchezza (Ha giocato ieri!) | {form_info}"
-
-        return True, form_info
-    except Exception as e:
-        print(f"Errore controllo NBA per {team_name}: {e}")
-    return True, form_info
-
-
-def check_nhl_form(team_name):
-    """Controlla record e statistiche NHL tramite API ufficiale"""
-    url = "https://api-web.nhle.com/v1/standings/now"
-    try:
-        res = requests.get(url, timeout=5)
-        if res.status_code == 200:
-            data = res.json()
-            for team_record in data.get("standings", []):
-                place = team_record.get("placeName", {}).get("default", "")
-                name = team_record.get("teamName", {}).get("default", "")
-                full_name = f"{place} {name}"
-                if team_name.lower() in full_name.lower() or team_name.lower() in name.lower():
-                    wins = team_record.get("wins", 0)
-                    losses = team_record.get("losses", 0)
-                    ot_losses = team_record.get("otLosses", 0)
-                    streak = team_record.get("streakCode", "N/A")
-                    return True, f"NHL Record: {wins}-{losses}-{ot_losses} | Streak: {streak}"
-    except Exception as e:
-        print(f"Errore controllo NHL per {team_name}: {e}")
-    return True, "NHL Form OK"
-
-
-def analyze_advanced_markets_with_gemini(sport, home, away):
-    """
-    Usa Gemini per analizzare infortuni, assenze pesanti e statistiche,
-    valutando i mercati avanzati e le player props richieste.
-    """
-    if not GEMINI_API_KEY:
+        parsed = json.loads(cleaned)
+        return parsed if isinstance(parsed, list) else []
+    except json.JSONDecodeError:
+        match = re.search(r"\[[\s\S]*\]", cleaned)
+        if match:
+            try:
+                parsed = json.loads(match.group(0))
+                return parsed if isinstance(parsed, list) else []
+            except json.JSONDecodeError:
+                return []
         return []
 
-    prompt = f"""
-    Sei un analista statistico ed esperto di scommesse sportive professionista per lo sport: {sport}.
-    Analizza la partita: {home} vs {away}.
-    
-    Devi valutare in modo RIGOROSO e severo (cercando solo esiti con probabilità REALE >= 65%) i seguenti mercati specifici in base allo sport:
-    
-    - SE CALCIO: 
-      1. Over/Under gol (es. Over 2.5 / Under 2.5)
-      2. Entrambe le squadre segnano (Goal / No Goal)
-      3. Multigol squadra casa o squadra ospite
-      4. Giocatore chiave che segna o fa assist
-    
-    - SE NHL (Hockey): 
-      1. Over/under gol nell'incontro
-      2. Gol giocatore / Punti giocatore / Assist giocatore
-    
-    - SE BASKETBALL_NBA: 
-      1. Esito finale
-      2. Punti giocatore / Assist giocatore / Rimbalzi giocatore
-      3. Tiri da 3 punti giocatore
-      4. Doppia doppia / Tripla doppia giocatore
-      5. Punti + assist / Assist + rimbalzi giocatore
 
-    REGOLE FONDAMENTALI:
-    - Controlla mentalmente (tramite le tue conoscenze aggiornate) se ci sono infortuni, squalifiche o assenze pesanti che influenzano questi mercati (es. assenza di un marcatore chiave o di un difensore titolare).
-    - Includi SOLO gli esiti che hanno una probabilità stimata STRETTAMENTE superiore o uguale al 65.0%.
-    
-    Rispondi ESCLUSIVAMENTE in formato JSON puro (senza blocchi markdown di formattazione come ```json), strutturato come una lista di oggetti:
-    [
+# ================= GEMINI UNIFICATO (1X2 + CLASSIFICA/GOL CASA-TRASFERTA + ASSENZE + PROPS) =================
+
+def analyze_match_complete_with_gemini(sport, home, away, today_str, standard_candidate=None):
+    """
+    Una singola chiamata Gemini + Google Search per partita che:
+    1. Recupera classifica attuale, gol/punti fatti e subiti di home IN CASA e away IN TRASFERTA,
+       ultime 5 partite (e back-to-back per NBA) e infortuni/squalifiche/assenze pesanti.
+    2. Se presente `standard_candidate` (un esito 1X2 passato dai filtri quote), ne valida o blocca
+       la giocata in base ai dati reali e alle assenze.
+    3. Analizza i mercati avanzati / player props richiesti per lo sport e restituisce solo quelli >= 65%.
+    """
+    if not client:
+        return {}
+
+    candidate_block = "Nessuna candidatura 1X2 standard da valutare."
+    if standard_candidate:
+        candidate_block = (
+            f"Candidatura 1X2 standard da validare: esito='{standard_candidate['esito']}' "
+            f"({'Trasferta' if standard_candidate['is_away'] else 'Casa'}), "
+            f"quota={standard_candidate['quota']}, prob_base={standard_candidate['base_prob']}%, "
+            f"soglia_minima={standard_candidate['min_prob']}%."
+        )
+
+    prompt = f"""
+    Data odierna: {today_str}.
+    Sei un analista sportivo professionista per lo sport: {sport}.
+    Analizza la partita di oggi: {home} (Casa) vs {away} (Trasferta).
+    {candidate_block}
+
+    USA LA RICERCA GOOGLE PER VERIFICARE DATI REALI E AGGIORNATI:
+    1. Classifica attuale (posizione di {home} e {away}).
+    2. Rendimento specifico casa/trasferta nella stagione in corso:
+       - Gol o punti fatti e subiti da {home} SOLO IN CASA (`gf_casa`, `gs_casa`).
+       - Gol o punti fatti e subiti da {away} SOLO IN TRASFERTA (`gf_trasferta`, `gs_trasferta`).
+    3. Ultime 5 partite (`sconfitte_ultime_5_casa`, `sconfitte_ultime_5_trasferta`) e, se NBA, se una delle due squadre ha giocato ieri (`b2b_casa`, `b2b_trasferta`).
+    4. Infortuni, squalifiche e assenze pesanti confermate o molto probabili per oggi.
+
+    REGOLE RIGIDE DI VALIDAZIONE:
+    - Per la candidatura 1X2 standard (se presente): riduci `probabilita_finale` se ci sono infortuni/assenze importanti, forma scadente, B2B NBA o differenza reti/punti negativa nel contesto casa/trasferta. Imposta `approvata: false` se scende sotto la soglia minima o se il contesto è sfavorevole.
+    - Per i mercati avanzati / player props, includi SOLO esiti con probabilità reale >= 65.0% tra:
+      * CALCIO: Over/Under gol, Goal/No Goal, Multigol casa o ospite, Giocatore chiave che segna o fa assist.
+      * NHL: Over/Under gol incontro, Gol / Punti / Assist giocatore.
+      * BASKETBALL_NBA: Esito finale, Punti / Assist / Rimbalzi giocatore, Tiri da 3 punti giocatore, Doppia/Tripla doppia, Punti+Assist o Assist+Rimbalzi giocatore.
+
+    Rispondi ESCLUSIVAMENTE con un oggetto JSON valido con questa struttura esatta:
+    {{
+      "stats": {{
+        "pos_casa": 0,
+        "pos_trasferta": 0,
+        "gf_casa": 0,
+        "gs_casa": 0,
+        "gf_trasferta": 0,
+        "gs_trasferta": 0,
+        "sconfitte_ultime_5_casa": 0,
+        "sconfitte_ultime_5_trasferta": 0,
+        "b2b_casa": false,
+        "b2b_trasferta": false,
+        "riepilogo_classifica_gol": "Es. Casa 3° (25 GF / 9 GS in casa) | Trasf 12° (11 GF / 20 GS fuori)"
+      }},
+      "assenze_importanti": "Elenco sintetico infortuni/squalifiche rilevanti per oggi",
+      "standard_1x2": {{
+        "approvata": true,
+        "probabilita_finale": 68.5,
+        "motivazione": "Motivazione su assenze, forma e rendimento casa/trasferta"
+      }},
+      "mercati_avanzati": [
         {{
-            "mercato": "Nome del mercato (es. Entrambe le squadre segnano, Punti Giocatore LeBron James, ecc.)",
-            "esito": "Esito consigliato (es. GOL, Over 25.5 Punti, ecc.)",
-            "probabilita": 72.5,
-            "motivazione": "Spiegazione sintetica basata su assenze, infortuni o trend."
+          "mercato": "Nome mercato",
+          "esito": "Esito consigliato",
+          "probabilita": 71.0,
+          "motivazione": "Motivazione basata su gol casa/trasferta, classifica e assenze"
         }}
-    ]
-    Se nessun esito supera il 65%, restituisci una lista vuota: []
+      ]
+    }}
     """
 
     try:
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model="gemini-2.5-flash",
             contents=prompt,
+            config=types.GenerateContentConfig(
+                tools=SEARCH_TOOLS,
+                temperature=0.1,
+            ),
         )
-        text_response = response.text.strip()
-        
-        # Pulizia robusta in caso di blocchi di codice markdown
-        if text_response.startswith("```json"):
-            text_response = text_response[7:-3].strip()
-        elif text_response.startswith("```"):
-            text_response = text_response[3:-3].strip()
-
-        data = json.loads(text_response)
-        if isinstance(data, list):
-            return data
+        return extract_json_dict(response.text or "")
     except Exception as e:
-        print(f"⚠️ Errore durante l'analisi avanzata con Gemini per {home} vs {away}: {e}")
-    return []
+        print(f"⚠️ Errore analisi completa Gemini per {home} vs {away}: {e}")
+        return {}
+
+
+def passes_hard_stats_filter(sport, stats, is_away_team):
+    """
+    Controllo numerico rigoroso in Python sui dati restituiti da Gemini:
+    - Almeno 3 sconfitte nelle ultime 5 nel contesto della squadra scelta -> BLOCCA
+    - Gol/punti fatti <= gol/punti subiti nel contesto specifico (casa per home, trasferta per away) -> BLOCCA
+    - NBA Back-to-Back per la squadra scelta -> BLOCCA
+    """
+    if not isinstance(stats, dict) or not stats:
+        return False, "Statistiche casa/trasferta non disponibili"
+
+    try:
+        if is_away_team:
+            gf = float(stats.get("gf_trasferta", 0) or 0)
+            gs = float(stats.get("gs_trasferta", 0) or 0)
+            losses = int(stats.get("sconfitte_ultime_5_trasferta", 0) or 0)
+            b2b = bool(stats.get("b2b_trasferta", False))
+            ctx = "trasferta"
+        else:
+            gf = float(stats.get("gf_casa", 0) or 0)
+            gs = float(stats.get("gs_casa", 0) or 0)
+            losses = int(stats.get("sconfitte_ultime_5_casa", 0) or 0)
+            b2b = bool(stats.get("b2b_casa", False))
+            ctx = "casa"
+
+        if "basketball_nba" in sport and b2b:
+            return False, f"NBA Back-to-Back in {ctx} (ha giocato ieri)"
+
+        if losses >= 3:
+            return False, f"Forma negativa ({losses} sconfitte nelle ultime 5)"
+
+        if gf > 0 and gs > 0 and gf <= gs:
+            return False, f"Rendimento {ctx} negativo ({gf} fatti vs {gs} subiti)"
+
+        return True, stats.get("riepilogo_classifica_gol", "Statistiche OK")
+    except Exception as e:
+        return False, f"Errore verifica numerica stats: {e}"
+
+
+# ================= SWISS NATIONAL LEAGUE (NLA) VIA GEMINI =================
+
+def analyze_swiss_nla_with_gemini(today_local_str):
+    """
+    Analizza la Swiss National League (NLA) tramite Gemini + Google Search:
+    - Calendario odierno
+    - Classifica, gol fatti/subiti in casa e trasferta, forma e infortuni
+    - Mercati ammessi: SOLO 1X2, Over/Under Gol Partita, Over/Under Gol Squadra
+    """
+    if not client:
+        return []
+
+    prompt = f"""
+    Data odierna locale: {today_local_str}.
+    Sei un analista esperto di hockey su ghiaccio per la Swiss National League (NLA / NL).
+
+    1. Cerca le partite ufficiali della National League svizzera in programma oggi ({today_local_str}). Se oggi non ci sono partite di NLA, restituisci [].
+    2. Per ogni partita di oggi, verifica tramite ricerca Google:
+       - Posizione in classifica attuale
+       - Gol fatti e subiti dalla squadra di casa IN CASA (`gf_casa`, `gs_casa`) e dalla squadra ospite IN TRASFERTA (`gf_trasferta`, `gs_trasferta`)
+       - Ultime 5 partite e infortuni/squalifiche/assenze aggiornate
+    3. Proponi SOLO esiti con probabilità reale >= 65.0% (e >= 70.0% se l'esito 1X2 è vittoria trasferta, con quota stimata > 1.29) esclusivamente su questi 3 mercati:
+       - "1X2"
+       - "Over/Under Gol Partita"
+       - "Over/Under Gol Squadra"
+
+    Rispondi ESCLUSIVAMENTE con una lista JSON:
+    [
+      {{
+        "home": "Squadra Casa",
+        "away": "Squadra Ospite",
+        "ora_locale": "19:45",
+        "mercato": "1X2",
+        "esito": "Squadra Casa",
+        "quota_stimata": 1.70,
+        "probabilita": 68.5,
+        "gf_casa": 55,
+        "gs_casa": 34,
+        "gf_trasferta": 38,
+        "gs_trasferta": 52,
+        "sconfitte_ultime_5_scelta": 1,
+        "riepilogo_classifica_gol": "Casa 2° (55 GF / 34 GS in casa) | Ospite 11° (38 GF / 52 GS fuori)",
+        "assenze_e_analisi": "Sintesi infortuni/assenze e motivazione"
+      }}
+    ]
+    """
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                tools=SEARCH_TOOLS,
+                temperature=0.1,
+            ),
+        )
+        return extract_json_list(response.text or "")
+    except Exception as e:
+        print(f"⚠️ Errore analisi Swiss NLA con Gemini: {e}")
+        return []
+
+
+def monitor_ai_tracked_bets(tracked_bets, today_str):
+    """
+    Controlla le scommesse attive non-OddsAPI (mercati avanzati e Swiss NLA)
+    per verificare se infortuni dell'ultimo minuto hanno fatto scendere la probabilità sotto soglia.
+    """
+    if not client:
+        return
+
+    ai_active = {
+        k: v for k, v in tracked_bets.items()
+        if v.get("status") == "active" and v.get("source") in ("gemini_advanced", "gemini_nla")
+    }
+    if not ai_active:
+        return
+
+    items_desc = [
+        {
+            "key": k,
+            "sport": v.get("sport"),
+            "match": f"{v.get('home')} vs {v.get('away')}",
+            "mercato": v.get("mercato", ""),
+            "esito": v.get("esito"),
+            "prob_precedente": v.get("prob"),
+            "min_prob": v.get("min_prob", 65.0),
+        }
+        for k, v in ai_active.items()
+    ]
+
+    prompt = f"""
+    Data odierna: {today_str}.
+    Verifica tramite ricerca Google se ci sono novità dell'ultimo minuto (infortuni, assenze improvvise, portieri/titolari fuori) per queste scommesse già inviate:
+    {json.dumps(items_desc, ensure_ascii=False)}
+
+    Per ciascuna chiave `key`, indica la `nuova_probabilita` aggiornata e `revoca` (true se scende sotto `min_prob`, altrimenti false).
+    Rispondi ESCLUSIVAMENTE con una lista JSON:
+    [
+      {{
+        "key": "...",
+        "nuova_probabilita": 60.0,
+        "revoca": true,
+        "motivo": "Motivo dell'eventuale revoca"
+      }}
+    ]
+    """
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                tools=SEARCH_TOOLS,
+                temperature=0.1,
+            ),
+        )
+        updates = extract_json_list(response.text or "")
+        for upd in updates:
+            key = upd.get("key")
+            if key in tracked_bets and tracked_bets[key].get("status") == "active":
+                new_prob = float(upd.get("nuova_probabilita", tracked_bets[key]["prob"]) or 0)
+                min_p = float(tracked_bets[key].get("min_prob", 65.0))
+                if bool(upd.get("revoca", False)) or new_prob < min_p:
+                    bet = tracked_bets[key]
+                    msg = (
+                        "----------------------------------------\n"
+                        "🛑 [STOP SCOMMESSA / REVOCA AI] 🛑\n"
+                        f"⚔️ Match: {bet.get('home')} vs {bet.get('away')}\n"
+                        f"🎯 Mercato / Esito: {bet.get('mercato', '')} - {bet.get('esito')}\n"
+                        f"📊 Nuova Probabilità: {round(new_prob, 1)}%\n"
+                        f"🩺 Motivo: {upd.get('motivo', 'Cambio condizioni / assenze')}\n"
+                        "❌ CONSIGLIO: NON SCOMMETTERE PIÙ O CHIUDI LA POSIZIONE!"
+                    )
+                    send_discord_alert(msg)
+                    tracked_bets[key]["status"] = "revoked"
+                    save_state(tracked_bets)
+                    time.sleep(1)
+    except Exception as e:
+        print(f"⚠️ Errore monitoraggio revoche AI: {e}")
 
 
 # ==============================================================================
 
 def run_bot_cycle(tracked_bets):
-    print("🔄 Avvio ciclo intelligente multi-sport con mercati avanzati (Gemini + Odds API)...")
-    sports_to_check = get_active_football_sports_today()
+    print("🔄 Avvio ciclo completo (Odds API 1X2 + Gemini Unificato + Swiss NLA)...")
+    sports_to_check = list(LEAGUE_MAPPING.values()) + ALWAYS_ACTIVE_SPORTS
 
     italy_tz = ZoneInfo("Europe/Rome")
     now_local = datetime.now(italy_tz)
-    
+
     start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
-    end_local = start_local + timedelta(hours=31) 
+    end_local = start_local + timedelta(hours=31)
 
     start_of_day = start_local.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     end_of_day = end_local.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     today_local_str = start_local.strftime("%Y-%m-%d")
+
+    monitor_ai_tracked_bets(tracked_bets, today_local_str)
 
     for sport in sports_to_check:
         url = f"https://api.the-odds-api.com/v4/sports/{sport}/odds/"
@@ -333,21 +434,21 @@ def run_bot_cycle(tracked_bets):
             if res.status_code != 200:
                 print(f"⚠️ Errore Odds API per {sport}: Codice {res.status_code}")
                 continue
-            
+
             data = res.json()
-            if not isinstance(data, list):
+            if not isinstance(data, list) or not data:
                 continue
 
-            # 1. MONITORAGGIO BET GIÀ SALVATE
+            # 1. MONITORAGGIO REVOCA BET 1X2 STANDARD GIÀ SALVATE
             for match in data:
                 home = match.get("home_team")
                 away = match.get("away_team")
                 if not home or not away:
                     continue
-                
+
                 match_key = get_existing_key(tracked_bets, home, away)
 
-                if match_key in tracked_bets and tracked_bets[match_key]["status"] == "active":
+                if match_key in tracked_bets and tracked_bets[match_key].get("status") == "active":
                     bookmakers = match.get("bookmakers", [])
                     if bookmakers and "markets" in bookmakers[0]:
                         outcomes = bookmakers[0]["markets"][0].get("outcomes", [])
@@ -361,7 +462,8 @@ def run_bot_cycle(tracked_bets):
                                 if current_prob > 95:
                                     current_prob = 95.0
 
-                                if current_prob < 65.0:
+                                min_p = float(tracked_bets[match_key].get("min_prob", 65.0))
+                                if current_prob < min_p:
                                     msg = (
                                         "----------------------------------------\n"
                                         "🛑 [STOP SCOMMESSA / REVOCA VALUE BET] 🛑\n"
@@ -375,12 +477,12 @@ def run_bot_cycle(tracked_bets):
                                     save_state(tracked_bets)
                                     time.sleep(1)
 
-            # 2. RICERCA NUOVE VALUE BET (STANDARD + AVANZATE VIA GEMINI)
+            # 2. RICERCA NUOVE VALUE BET PER OGNI PARTITA DI OGGI
             for match in data:
                 commence_time = match.get("commence_time", "")
                 if not commence_time:
                     continue
-                
+
                 try:
                     dt_utc = datetime.fromisoformat(commence_time.replace("Z", "+00:00"))
                     dt_local = dt_utc.astimezone(italy_tz)
@@ -395,13 +497,13 @@ def run_bot_cycle(tracked_bets):
                 away = match.get("away_team")
                 if not home or not away:
                     continue
-                
+
                 match_key = get_existing_key(tracked_bets, home, away)
                 formatted_time = format_match_time(commence_time)
 
-                # --- A. CONTROLLO MERCATI TRADIZIONALI (1X2 / Moneylines) ---
+                standard_candidate = None
                 bookmakers = match.get("bookmakers", [])
-                if bookmakers and "markets" in bookmakers[0]:
+                if bookmakers and "markets" in bookmakers[0] and match_key not in tracked_bets:
                     outcomes_map = {}
                     for bookmaker in bookmakers:
                         markets = bookmaker.get("markets", [])
@@ -410,9 +512,7 @@ def run_bot_cycle(tracked_bets):
                                 name = out.get("name")
                                 price = out.get("price")
                                 if name and price:
-                                    if name not in outcomes_map:
-                                        outcomes_map[name] = []
-                                    outcomes_map[name].append(price)
+                                    outcomes_map.setdefault(name, []).append(price)
 
                     book = bookmakers[0].get("title", "Bookmaker")
                     outcomes = bookmakers[0]["markets"][0].get("outcomes", [])
@@ -423,7 +523,7 @@ def run_bot_cycle(tracked_bets):
                         price = out.get("price")
                         if not name or not price:
                             continue
-                        
+
                         if name in outcomes_map and len(outcomes_map[name]) > 1:
                             avg_price = sum(outcomes_map[name]) / len(outcomes_map[name])
                             if price > avg_price * 1.15:
@@ -440,62 +540,91 @@ def run_bot_cycle(tracked_bets):
                                 if name not in probs_dict:
                                     continue
                                 price = out.get("price")
-                                calculated_prob = probs_dict[name]
-
+                                base_prob = probs_dict[name]
                                 is_away_team = (name == away)
                                 min_prob_required = 70.0 if is_away_team else 65.0
 
-                                if price > 1.29 and calculated_prob >= min_prob_required and match_key not in tracked_bets:
-                                    target_team = home if name == home else (away if name == away else None)
-                                    form_ok = True
-                                    form_info = "N/A"
+                                if price > 1.29 and base_prob >= min_prob_required:
+                                    standard_candidate = {
+                                        "esito": name,
+                                        "is_away": is_away_team,
+                                        "quota": price,
+                                        "book": book,
+                                        "base_prob": base_prob,
+                                        "min_prob": min_prob_required,
+                                    }
+                                    break
 
-                                    if target_team:
-                                        if "soccer" in sport:
-                                            form_ok, form_info = check_soccer_advanced(sport, target_team)
-                                        elif "basketball_nba" in sport:
-                                            form_ok, form_info = check_nba_form(target_team)
-                                        elif "icehockey_nhl" in sport:
-                                            form_ok, form_info = check_nhl_form(target_team)
+                ai_result = analyze_match_complete_with_gemini(
+                    sport, home, away, today_local_str, standard_candidate=standard_candidate
+                )
+                if not ai_result:
+                    continue
 
-                                    if form_ok:
-                                        recommended_stake = calculate_stake(calculated_prob)
-                                        msg = (
-                                            "----------------------------------------\n"
-                                            "💎 [VALUE BET STANDARD OTTIMIZZATA] 💎\n"
-                                            f"🏆 Sport: {sport.replace('_', ' ').upper()}\n"
-                                            f"⚔️ Match: {home} vs {away}\n"
-                                            f"⏰ Inizio: {formatted_time}\n"
-                                            f"🎯 Esito: {name} {'(Trasferta)' if is_away_team else '(Casa)'}\n"
-                                            f"💰 Quota: {price} ({book})\n"
-                                            f"📊 Probabilità: {calculated_prob}%\n"
-                                            f"💵 Stake: **{recommended_stake}**\n"
-                                            f"📈 Dettagli: {form_info}\n"
-                                            "✅ Filtri Superati!"
-                                        )
-                                        send_discord_alert(msg)
-                                        tracked_bets[match_key] = {
-                                            "sport": sport,
-                                            "home": home,
-                                            "away": away,
-                                            "esito": name,
-                                            "prob": calculated_prob,
-                                            "status": "active",
-                                        }
-                                        save_state(tracked_bets)
-                                        time.sleep(1)
+                stats_obj = ai_result.get("stats", {})
+                assenze_txt = ai_result.get("assenze_importanti", "Nessuna criticità segnalata")
+                riepilogo_stats = stats_obj.get("riepilogo_classifica_gol", "N/D")
 
-                # --- B. CONTROLLO MERCATI AVANZATI & PLAYER PROPS (VIA GEMINI) ---
-                advanced_bets = analyze_advanced_markets_with_gemini(sport, home, away)
-                for bet in advanced_bets:
-                    if bet.get("probabilita", 0) >= 65.0:
+                # --- A. INVIO EVENTUALE BET 1X2 STANDARD ---
+                if standard_candidate and match_key not in tracked_bets:
+                    std_eval = ai_result.get("standard_1x2", {})
+                    final_prob = round(float(std_eval.get("probabilita_finale", 0) or 0), 1)
+                    final_prob = min(final_prob, 95.0)
+                    min_req = standard_candidate["min_prob"]
+
+                    hard_ok, hard_reason = passes_hard_stats_filter(
+                        sport, stats_obj, standard_candidate["is_away"]
+                    )
+                    ai_approved = bool(std_eval.get("approvata", False)) and (final_prob >= min_req)
+
+                    if hard_ok and ai_approved:
+                        recommended_stake = calculate_stake(final_prob)
+                        msg = (
+                            "----------------------------------------\n"
+                            "💎 [VALUE BET STANDARD OTTIMIZZATA] 💎\n"
+                            f"🏆 Sport: {sport.replace('_', ' ').upper()}\n"
+                            f"⚔️ Match: {home} vs {away}\n"
+                            f"⏰ Inizio: {formatted_time}\n"
+                            f"🎯 Esito: {standard_candidate['esito']} {'(Trasferta)' if standard_candidate['is_away'] else '(Casa)'}\n"
+                            f"💰 Quota: {standard_candidate['quota']} ({standard_candidate['book']})\n"
+                            f"📊 Probabilità: {final_prob}%\n"
+                            f"💵 Stake: **{recommended_stake}**\n"
+                            f"📈 Classifica & Gol Casa/Trasf: {riepilogo_stats}\n"
+                            f"🩺 Assenze: {assenze_txt}\n"
+                            f"📝 Analisi: {std_eval.get('motivazione', '')}\n"
+                            "✅ Filtri Superati!"
+                        )
+                        send_discord_alert(msg)
+                        tracked_bets[match_key] = {
+                            "source": "odds_api_1x2",
+                            "sport": sport,
+                            "home": home,
+                            "away": away,
+                            "mercato": "1X2",
+                            "esito": standard_candidate["esito"],
+                            "prob": final_prob,
+                            "min_prob": min_req,
+                            "status": "active",
+                        }
+                        save_state(tracked_bets)
+                        time.sleep(1)
+                    else:
+                        print(
+                            f"⛔ Bloccata 1X2 {home} vs {away} ({standard_candidate['esito']}): "
+                            f"hard_ok={hard_ok} ({hard_reason}), ai_approved={ai_approved}, prob={final_prob}%"
+                        )
+
+                # --- B. INVIO MERCATI AVANZATI & PLAYER PROPS ---
+                for bet in ai_result.get("mercati_avanzati", []):
+                    prob_stimata = round(float(bet.get("probabilita", 0) or 0), 1)
+                    if prob_stimata >= 65.0:
                         mercato_nome = bet.get("mercato")
                         esito_consigliato = bet.get("esito")
-                        prob_stimata = bet.get("probabilita")
-                        motivazione = bet.get("motivazione")
-                        recommended_stake = calculate_stake(prob_stimata)
+                        motivazione = bet.get("motivazione", "")
+                        if not mercato_nome or not esito_consigliato:
+                            continue
 
-                        # Chiave univoca per evitare doppie notifiche sullo stesso mercato avanzato
+                        recommended_stake = calculate_stake(prob_stimata)
                         adv_match_key = f"{match_key}_{mercato_nome}_{esito_consigliato}".replace(" ", "_")
 
                         if adv_match_key not in tracked_bets:
@@ -507,18 +636,23 @@ def run_bot_cycle(tracked_bets):
                                 f"⏰ Inizio: {formatted_time}\n"
                                 f"🎯 Mercato: {mercato_nome}\n"
                                 f"📌 Esito Consigliato: **{esito_consigliato}**\n"
-                                f"📊 Probabilità Stimata (AI + Assenze): {prob_stimata}%\n"
+                                f"📊 Probabilità Stimata: {prob_stimata}%\n"
                                 f"💵 Stake Consigliato: **{recommended_stake}**\n"
-                                f"📝 Analisi Contesto: {motivazione}\n"
+                                f"📈 Classifica & Gol Casa/Trasf: {riepilogo_stats}\n"
+                                f"🩺 Assenze: {assenze_txt}\n"
+                                f"📝 Analisi: {motivazione}\n"
                                 "✅ Analisi Qualitativa Superata!"
                             )
                             send_discord_alert(msg)
                             tracked_bets[adv_match_key] = {
+                                "source": "gemini_advanced",
                                 "sport": sport,
                                 "home": home,
                                 "away": away,
+                                "mercato": mercato_nome,
                                 "esito": esito_consigliato,
                                 "prob": prob_stimata,
+                                "min_prob": 65.0,
                                 "status": "active",
                             }
                             save_state(tracked_bets)
@@ -527,9 +661,75 @@ def run_bot_cycle(tracked_bets):
         except Exception as e:
             print(f"Errore generale nel controllo per {sport}: {e}")
 
+    # 3. SWISS NATIONAL LEAGUE (NLA) VIA GEMINI
+    print("🏒 Controllo Swiss National League (NLA) tramite Gemini...")
+    nla_bets = analyze_swiss_nla_with_gemini(today_local_str)
+    allowed_nla_markets = {"1x2", "over/under gol partita", "over/under gol squadra"}
+
+    for item in nla_bets:
+        home = item.get("home")
+        away = item.get("away")
+        mercato = item.get("mercato", "")
+        esito = item.get("esito", "")
+        prob = round(float(item.get("probabilita", 0) or 0), 1)
+        quota_stimata = float(item.get("quota_stimata", 0) or 0)
+        ora_locale = item.get("ora_locale", "Oggi")
+        riepilogo_stats = item.get("riepilogo_classifica_gol", "N/D")
+        nota = item.get("assenze_e_analisi", "")
+        sconfitte_5 = int(item.get("sconfitte_ultime_5_scelta", 0) or 0)
+
+        if not home or not away or not mercato or not esito:
+            continue
+
+        if mercato.strip().lower() not in allowed_nla_markets:
+            continue
+
+        is_1x2 = (mercato.strip().lower() == "1x2")
+        is_away_1x2 = (is_1x2 and esito.strip().lower() == away.strip().lower())
+        min_prob = 70.0 if is_away_1x2 else 65.0
+
+        if prob < min_prob or sconfitte_5 >= 3:
+            continue
+
+        if is_1x2 and quota_stimata > 0 and quota_stimata <= 1.29:
+            continue
+
+        nla_key = f"NLA_{today_local_str}_{home}vs{away}_{mercato}_{esito}".replace(" ", "_")
+        if nla_key not in tracked_bets:
+            recommended_stake = calculate_stake(prob)
+            msg = (
+                "----------------------------------------\n"
+                "🇨🇭 [SWISS NLA - VALUE BET GEMINI] 🇨🇭\n"
+                f"🏆 Sport: SWISS NATIONAL LEAGUE (NLA)\n"
+                f"⚔️ Match: {home} vs {away}\n"
+                f"⏰ Inizio: {today_local_str} {ora_locale}\n"
+                f"🎯 Mercato: {mercato}\n"
+                f"📌 Esito Consigliato: **{esito}**\n"
+                f"💰 Quota Stimata (AI): {quota_stimata if quota_stimata > 0 else 'N/D'}\n"
+                f"📊 Probabilità Stimata: {prob}%\n"
+                f"💵 Stake Consigliato: **{recommended_stake}**\n"
+                f"📈 Classifica & Gol Casa/Trasf: {riepilogo_stats}\n"
+                f"🩺 Assenze & Analisi: {nota}\n"
+                "✅ Soglie e Contesto Verificati!"
+            )
+            send_discord_alert(msg)
+            tracked_bets[nla_key] = {
+                "source": "gemini_nla",
+                "sport": "icehockey_swiss_nla",
+                "home": home,
+                "away": away,
+                "mercato": mercato,
+                "esito": esito,
+                "prob": prob,
+                "min_prob": min_prob,
+                "status": "active",
+            }
+            save_state(tracked_bets)
+            time.sleep(1)
+
 
 if __name__ == "__main__":
-    print(f"\n--- Esecuzione Ciclo Avanzato Bot (Odds API + Gemini): {datetime.now()} ---")
+    print(f"\n--- Esecuzione Ciclo Completo Bot: {datetime.now()} ---")
     tracked_bets = load_state()
     run_bot_cycle(tracked_bets)
     print("--- Esecuzione completata ---")
