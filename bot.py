@@ -131,13 +131,14 @@ def extract_json_list(text: str) -> list:
         return []
 
 
-# ================= GEMINI UNIFICATO (1X2 + CLASSIFICA/GOL CASA-TRASFERTA + ASSENZE + PROPS) =================
+# ================= GEMINI UNIFICATO (1X2 + CLASSIFICA/GOL CASA-TRASFERTA + CARICO GARE + ASSENZE + PROPS) =================
 
 def analyze_match_complete_with_gemini(sport, home, away, today_str, standard_candidate=None):
     """
     Una singola chiamata Gemini + Google Search per partita che:
     1. Recupera classifica attuale, gol/punti fatti e subiti di home IN CASA e away IN TRASFERTA,
-       ultime 5 partite (e back-to-back per NBA) e infortuni/squalifiche/assenze pesanti.
+       ultime 5 partite, carico ravvicinato (3 partite giocate o da giocare in 4 o 5 giorni)
+       e infortuni/squalifiche/assenze pesanti.
     2. Se presente `standard_candidate` (un esito 1X2 passato dai filtri quote), ne valida o blocca
        la giocata in base ai dati reali e alle assenze.
     3. Analizza i mercati avanzati / player props richiesti per lo sport e restituisce solo quelli >= 65%.
@@ -165,11 +166,11 @@ def analyze_match_complete_with_gemini(sport, home, away, today_str, standard_ca
     2. Rendimento specifico casa/trasferta nella stagione in corso:
        - Gol o punti fatti e subiti da {home} SOLO IN CASA (`gf_casa`, `gs_casa`).
        - Gol o punti fatti e subiti da {away} SOLO IN TRASFERTA (`gf_trasferta`, `gs_trasferta`).
-    3. Ultime 5 partite (`sconfitte_ultime_5_casa`, `sconfitte_ultime_5_trasferta`) e, se NBA, se una delle due squadre ha giocato ieri (`b2b_casa`, `b2b_trasferta`).
+    3. Ultime 5 partite (`sconfitte_ultime_5_casa`, `sconfitte_ultime_5_trasferta`) e carico ravvicinato di partite (includendo la partita di oggi e quelle recenti/imminenti): verifica se {home} oppure {away} ha giocato o deve giocare 3 partite in 4 giorni o 3 partite in 5 giorni (`tre_in_4_5_giorni_casa`, `tre_in_4_5_giorni_trasferta`).
     4. Infortuni, squalifiche e assenze pesanti confermate o molto probabili per oggi.
 
     REGOLE RIGIDE DI VALIDAZIONE:
-    - Per la candidatura 1X2 standard (se presente): riduci `probabilita_finale` se ci sono infortuni/assenze importanti, forma scadente, B2B NBA o differenza reti/punti negativa nel contesto casa/trasferta. Imposta `approvata: false` se scende sotto la soglia minima o se il contesto è sfavorevole.
+    - Per la candidatura 1X2 standard (se presente): riduci `probabilita_finale` se ci sono infortuni/assenze importanti, forma scadente, carico ravvicinato (3 partite in 4-5 giorni) o differenza reti/punti negativa nel contesto casa/trasferta. Imposta `approvata: false` se scende sotto la soglia minima o se il contesto è sfavorevole.
     - Per i mercati avanzati / player props, includi SOLO esiti con probabilità reale >= 65.0% tra:
       * CALCIO: Over/Under gol, Goal/No Goal, Multigol casa o ospite, Giocatore chiave che segna o fa assist.
       * NHL: Over/Under gol incontro, Gol / Punti / Assist giocatore.
@@ -186,15 +187,15 @@ def analyze_match_complete_with_gemini(sport, home, away, today_str, standard_ca
         "gs_trasferta": 0,
         "sconfitte_ultime_5_casa": 0,
         "sconfitte_ultime_5_trasferta": 0,
-        "b2b_casa": false,
-        "b2b_trasferta": false,
+        "tre_in_4_5_giorni_casa": false,
+        "tre_in_4_5_giorni_trasferta": false,
         "riepilogo_classifica_gol": "Es. Casa 3° (25 GF / 9 GS in casa) | Trasf 12° (11 GF / 20 GS fuori)"
       }},
       "assenze_importanti": "Elenco sintetico infortuni/squalifiche rilevanti per oggi",
       "standard_1x2": {{
         "approvata": true,
         "probabilita_finale": 68.5,
-        "motivazione": "Motivazione su assenze, forma e rendimento casa/trasferta"
+        "motivazione": "Motivazione su assenze, forma, carico gare e rendimento casa/trasferta"
       }},
       "mercati_avanzati": [
         {{
@@ -227,7 +228,7 @@ def passes_hard_stats_filter(sport, stats, is_away_team):
     Controllo numerico rigoroso in Python sui dati restituiti da Gemini:
     - Almeno 3 sconfitte nelle ultime 5 nel contesto della squadra scelta -> BLOCCA
     - Gol/punti fatti <= gol/punti subiti nel contesto specifico (casa per home, trasferta per away) -> BLOCCA
-    - NBA Back-to-Back per la squadra scelta -> BLOCCA
+    - 3 partite giocate o da giocare in 4 o 5 giorni per la squadra scelta -> BLOCCA
     """
     if not isinstance(stats, dict) or not stats:
         return False, "Statistiche casa/trasferta non disponibili"
@@ -237,17 +238,17 @@ def passes_hard_stats_filter(sport, stats, is_away_team):
             gf = float(stats.get("gf_trasferta", 0) or 0)
             gs = float(stats.get("gs_trasferta", 0) or 0)
             losses = int(stats.get("sconfitte_ultime_5_trasferta", 0) or 0)
-            b2b = bool(stats.get("b2b_trasferta", False))
+            heavy_schedule = bool(stats.get("tre_in_4_5_giorni_trasferta", False))
             ctx = "trasferta"
         else:
             gf = float(stats.get("gf_casa", 0) or 0)
             gs = float(stats.get("gs_casa", 0) or 0)
             losses = int(stats.get("sconfitte_ultime_5_casa", 0) or 0)
-            b2b = bool(stats.get("b2b_casa", False))
+            heavy_schedule = bool(stats.get("tre_in_4_5_giorni_casa", False))
             ctx = "casa"
 
-        if "basketball_nba" in sport and b2b:
-            return False, f"NBA Back-to-Back in {ctx} (ha giocato ieri)"
+        if heavy_schedule:
+            return False, f"Carico ravvicinato in {ctx} (3 partite in 4-5 giorni)"
 
         if losses >= 3:
             return False, f"Forma negativa ({losses} sconfitte nelle ultime 5)"
@@ -266,7 +267,7 @@ def analyze_swiss_nla_with_gemini(today_local_str):
     """
     Analizza la Swiss National League (NLA) tramite Gemini + Google Search:
     - Calendario odierno
-    - Classifica, gol fatti/subiti in casa e trasferta, forma e infortuni
+    - Classifica, gol fatti/subiti in casa e trasferta, forma, carico gare e infortuni
     - Mercati ammessi: SOLO 1X2, Over/Under Gol Partita, Over/Under Gol Squadra
     """
     if not client:
@@ -280,7 +281,7 @@ def analyze_swiss_nla_with_gemini(today_local_str):
     2. Per ogni partita di oggi, verifica tramite ricerca Google:
        - Posizione in classifica attuale
        - Gol fatti e subiti dalla squadra di casa IN CASA (`gf_casa`, `gs_casa`) e dalla squadra ospite IN TRASFERTA (`gf_trasferta`, `gs_trasferta`)
-       - Ultime 5 partite e infortuni/squalifiche/assenze aggiornate
+       - Ultime 5 partite, se la squadra scelta ha 3 partite in 4 o 5 giorni (`tre_in_4_5_giorni_scelta`) e infortuni/squalifiche/assenze aggiornate
     3. Proponi SOLO esiti con probabilità reale >= 65.0% (e >= 70.0% se l'esito 1X2 è vittoria trasferta, con quota stimata > 1.29) esclusivamente su questi 3 mercati:
        - "1X2"
        - "Over/Under Gol Partita"
@@ -301,6 +302,7 @@ def analyze_swiss_nla_with_gemini(today_local_str):
         "gf_trasferta": 38,
         "gs_trasferta": 52,
         "sconfitte_ultime_5_scelta": 1,
+        "tre_in_4_5_giorni_scelta": false,
         "riepilogo_classifica_gol": "Casa 2° (55 GF / 34 GS in casa) | Ospite 11° (38 GF / 52 GS fuori)",
         "assenze_e_analisi": "Sintesi infortuni/assenze e motivazione"
       }}
@@ -677,6 +679,7 @@ def run_bot_cycle(tracked_bets):
         riepilogo_stats = item.get("riepilogo_classifica_gol", "N/D")
         nota = item.get("assenze_e_analisi", "")
         sconfitte_5 = int(item.get("sconfitte_ultime_5_scelta", 0) or 0)
+        heavy_nla = bool(item.get("tre_in_4_5_giorni_scelta", False))
 
         if not home or not away or not mercato or not esito:
             continue
@@ -688,7 +691,7 @@ def run_bot_cycle(tracked_bets):
         is_away_1x2 = (is_1x2 and esito.strip().lower() == away.strip().lower())
         min_prob = 70.0 if is_away_1x2 else 65.0
 
-        if prob < min_prob or sconfitte_5 >= 3:
+        if prob < min_prob or sconfitte_5 >= 3 or heavy_nla:
             continue
 
         if is_1x2 and quota_stimata > 0 and quota_stimata <= 1.29:
