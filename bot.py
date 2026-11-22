@@ -12,6 +12,7 @@ from google.genai import types
 ODDS_API_KEY = os.environ.get("ODDS_API_KEY")
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
 STATE_FILE = "tracked_bets.json"
 # Se RUN_ONCE=true (es. su GitHub Actions cron), esegue un ciclo ed esce;
 # altrimenti gira in loop continuo ogni POLL_INTERVAL_SECONDS.
@@ -226,7 +227,7 @@ def analyze_match_complete_with_gemini(sport, home, away, today_str, standard_ca
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=GEMINI_MODEL,
             contents=prompt,
             config=types.GenerateContentConfig(
                 tools=SEARCH_TOOLS,
@@ -320,7 +321,7 @@ def analyze_swiss_nla_with_gemini(today_local_str):
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=GEMINI_MODEL,
             contents=prompt,
             config=types.GenerateContentConfig(
                 tools=SEARCH_TOOLS,
@@ -378,7 +379,7 @@ def monitor_ai_tracked_bets(tracked_bets, today_str):
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=GEMINI_MODEL,
             contents=prompt,
             config=types.GenerateContentConfig(
                 tools=SEARCH_TOOLS,
@@ -413,7 +414,7 @@ def monitor_ai_tracked_bets(tracked_bets, today_str):
 # ==============================================================================
 
 def run_bot_cycle(tracked_bets):
-    print("🔄 Avvio ciclo completo (Odds API 1X2 + Gemini Unificato + Swiss NLA)...")
+    print(f"🔄 Avvio ciclo completo (Odds API 1X2 + {GEMINI_MODEL} + Swiss NLA)...")
     sports_to_check = list(LEAGUE_MAPPING.values()) + ALWAYS_ACTIVE_SPORTS
 
     italy_tz = ZoneInfo("Europe/Rome")
