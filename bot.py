@@ -145,10 +145,21 @@ def extract_json_list(text: str) -> list:
         return []
 
 
-# ================= GEMINI UNIFICATO (1X2 + CLASSIFICA/GOL CASA-TRASFERTA + CARICO GARE + ASSENZE + PROPS) =================
+def find_first_valid_bookmaker(bookmakers):
+    if not isinstance(bookmakers, list):
+        return None, []
+    for bm in bookmakers:
+        markets = bm.get("markets", [])
+        if markets and isinstance(markets[0].get("outcomes"), list) and len(markets[0]["outcomes"]) >= 2:
+            return bm.get("title", "Bookmaker"), markets[0]["outcomes"]
+    return None, []
+
+
+# ================= GEMINI UNIFICATO =================
 
 def analyze_match_complete_with_gemini(sport, home, away, today_str, standard_candidate=None):
     if not client:
+        print("⚠️ GEMINI_API_KEY non configurato.")
         return {}
 
     candidate_block = "Nessuna candidatura 1X2 standard da valutare."
@@ -222,7 +233,12 @@ def analyze_match_complete_with_gemini(sport, home, away, today_str, standard_ca
                 temperature=0.1,
             ),
         )
-        return extract_json_dict(response.text or "")
+        raw_text = response.text or ""
+        print(f"🤖 [{sport}] Gemini su {home} vs {away}: {raw_text[:200].replace(chr(10), ' ')}")
+        parsed = extract_json_dict(raw_text)
+        if not parsed:
+            print(f"⚠️ [{sport}] Impossibile leggere JSON valido da Gemini per {home} vs {away}")
+        return parsed
     except Exception as e:
         print(f"⚠️ Errore analisi completa Gemini per {home} vs {away}: {e}")
         return {}
@@ -311,7 +327,9 @@ def analyze_swiss_nla_with_gemini(today_local_str):
                 temperature=0.1,
             ),
         )
-        return extract_json_list(response.text or "")
+        raw_text = response.text or ""
+        print(f"🏒 Gemini NLA: {raw_text[:200].replace(chr(10), ' ')}")
+        return extract_json_list(raw_text)
     except Exception as e:
         print(f"⚠️ Errore analisi Swiss NLA con Gemini: {e}")
         return []
@@ -408,6 +426,7 @@ def run_bot_cycle(tracked_bets):
     end_of_day = end_local.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     today_local_str = start_local.strftime("%Y-%m-%d")
 
+    print(f"📅 Data locale di riferimento: {today_local_str} (ora attuale: {now_local.strftime('%H:%M')})")
     monitor_ai_tracked_bets(tracked_bets, today_local_str)
 
     if not ODDS_API_KEY:
@@ -426,12 +445,28 @@ def run_bot_cycle(tracked_bets):
             try:
                 res = requests.get(url, params=params, timeout=10)
                 if res.status_code != 200:
-                    print(f"⚠️ Errore Odds API per {sport}: Codice {res.status_code}")
+                    print(f"⚠️ Errore Odds API per {sport}: Codice {res.status_code} - {res.text[:150]}")
                     continue
 
                 data = res.json()
                 if not isinstance(data, list) or not data:
+                    print(f"ℹ️ [{sport}] Nessun match restituito da Odds API.")
                     continue
+
+                today_matches = []
+                for match in data:
+                    commence_time = match.get("commence_time", "")
+                    if not commence_time:
+                        continue
+                    try:
+                        dt_utc = datetime.fromisoformat(commence_time.replace("Z", "+00:00"))
+                        dt_local = dt_utc.astimezone(italy_tz)
+                        if dt_local.strftime("%Y-%m-%d") == today_local_str:
+                            today_matches.append(match)
+                    except Exception:
+                        continue
+
+                print(f"📌 [{sport}] Trovati {len(data)} match nella finestra, {len(today_matches)} con data locale {today_local_str}.")
 
                 # 1. MONITORAGGIO REVOCA BET 1X2 STANDARD GIÀ SALVATE
                 for match in data:
@@ -443,48 +478,33 @@ def run_bot_cycle(tracked_bets):
                     match_key = get_existing_key(tracked_bets, home, away)
 
                     if match_key in tracked_bets and tracked_bets[match_key].get("status") == "active":
-                        bookmakers = match.get("bookmakers", [])
-                        if bookmakers and bookmakers[0].get("markets"):
-                            outcomes = bookmakers[0]["markets"][0].get("outcomes", [])
-                            for out in outcomes:
-                                if out.get("name") == tracked_bets[match_key]["esito"]:
-                                    current_price = out.get("price")
-                                    if not current_price:
-                                        continue
-                                    implied_prob = (1 / current_price) * 100
-                                    current_prob = min(round(implied_prob + 4.5, 1), 95.0)
+                        _, outcomes = find_first_valid_bookmaker(match.get("bookmakers", []))
+                        for out in outcomes:
+                            if out.get("name") == tracked_bets[match_key]["esito"]:
+                                current_price = out.get("price")
+                                if not current_price:
+                                    continue
+                                implied_prob = (1 / current_price) * 100
+                                current_prob = min(round(implied_prob + 4.5, 1), 95.0)
 
-                                    min_p = float(tracked_bets[match_key].get("min_prob", 65.0))
-                                    if current_prob < min_p:
-                                        msg = (
-                                            "----------------------------------------\n"
-                                            "🛑 [STOP SCOMMESSA / REVOCA VALUE BET] 🛑\n"
-                                            f"⚔️ Match: {home} vs {away}\n"
-                                            f"🎯 Esito Precedente: {tracked_bets[match_key]['esito']}\n"
-                                            f"📊 Nuova Probabilità: {current_prob}%\n"
-                                            "❌ CONSIGLIO: NON SCOMMETTERE PIÙ O CHIUDI LA POSIZIONE!"
-                                        )
-                                        if send_discord_alert(msg):
-                                            tracked_bets[match_key]["status"] = "revoked"
-                                            save_state(tracked_bets)
-                                            time.sleep(1)
+                                min_p = float(tracked_bets[match_key].get("min_prob", 65.0))
+                                if current_prob < min_p:
+                                    msg = (
+                                        "----------------------------------------\n"
+                                        "🛑 [STOP SCOMMESSA / REVOCA VALUE BET] 🛑\n"
+                                        f"⚔️ Match: {home} vs {away}\n"
+                                        f"🎯 Esito Precedente: {tracked_bets[match_key]['esito']}\n"
+                                        f"📊 Nuova Probabilità: {current_prob}%\n"
+                                        "❌ CONSIGLIO: NON SCOMMETTERE PIÙ O CHIUDI LA POSIZIONE!"
+                                    )
+                                    if send_discord_alert(msg):
+                                        tracked_bets[match_key]["status"] = "revoked"
+                                        save_state(tracked_bets)
+                                        time.sleep(1)
 
                 # 2. RICERCA NUOVE VALUE BET PER OGNI PARTITA DI OGGI
-                for match in data:
+                for match in today_matches:
                     commence_time = match.get("commence_time", "")
-                    if not commence_time:
-                        continue
-
-                    try:
-                        dt_utc = datetime.fromisoformat(commence_time.replace("Z", "+00:00"))
-                        dt_local = dt_utc.astimezone(italy_tz)
-                        match_date_str = dt_local.strftime("%Y-%m-%d")
-                    except Exception:
-                        continue
-
-                    if match_date_str != today_local_str:
-                        continue
-
                     home = match.get("home_team")
                     away = match.get("away_team")
                     if not home or not away:
@@ -495,7 +515,9 @@ def run_bot_cycle(tracked_bets):
 
                     standard_candidate = None
                     bookmakers = match.get("bookmakers", [])
-                    if bookmakers and bookmakers[0].get("markets") and match_key not in tracked_bets:
+                    book, outcomes = find_first_valid_bookmaker(bookmakers)
+
+                    if outcomes and match_key not in tracked_bets:
                         outcomes_map = {}
                         for bookmaker in bookmakers:
                             markets = bookmaker.get("markets", [])
@@ -505,9 +527,6 @@ def run_bot_cycle(tracked_bets):
                                     price = out.get("price")
                                     if name and price:
                                         outcomes_map.setdefault(name, []).append(price)
-
-                        book = bookmakers[0].get("title", "Bookmaker")
-                        outcomes = bookmakers[0]["markets"][0].get("outcomes", [])
 
                         probs_dict = {}
                         for out in outcomes:
@@ -608,47 +627,51 @@ def run_bot_cycle(tracked_bets):
                     # --- B. INVIO MERCATI AVANZATI & PLAYER PROPS ---
                     for bet in ai_result.get("mercati_avanzati", []):
                         prob_stimata = round(float(bet.get("probabilita", 0) or 0), 1)
-                        if prob_stimata >= 65.0:
-                            mercato_nome = str(bet.get("mercato", "")).strip()
-                            esito_consigliato = str(bet.get("esito", "")).strip()
-                            motivazione = bet.get("motivazione", "")
-                            if not mercato_nome or not esito_consigliato:
-                                continue
+                        mercato_nome = str(bet.get("mercato", "")).strip()
+                        esito_consigliato = str(bet.get("esito", "")).strip()
+                        motivazione = bet.get("motivazione", "")
 
-                            recommended_stake = calculate_stake(prob_stimata)
-                            safe_slug = re.sub(r"[^a-zA-Z0-9]+", "_", f"{mercato_nome}_{esito_consigliato}").strip("_")
-                            adv_match_key = f"{match_key}_{safe_slug}"
+                        if prob_stimata < 65.0:
+                            print(f"⛔ Scartato mercato avanzato {home} vs {away} ({mercato_nome} - {esito_consigliato}): prob {prob_stimata}% < 65%")
+                            continue
 
-                            if adv_match_key not in tracked_bets:
-                                msg = (
-                                    "----------------------------------------\n"
-                                    "🔥 [VALUE BET AVANZATA / PLAYER PROPS] 🔥\n"
-                                    f"🏆 Sport: {sport.replace('_', ' ').upper()}\n"
-                                    f"⚔️ Match: {home} vs {away}\n"
-                                    f"⏰ Inizio: {formatted_time}\n"
-                                    f"🎯 Mercato: {mercato_nome}\n"
-                                    f"📌 Esito Consigliato: **{esito_consigliato}**\n"
-                                    f"📊 Probabilità Stimata: {prob_stimata}%\n"
-                                    f"💵 Stake Consigliato: **{recommended_stake}**\n"
-                                    f"📈 Classifica & Gol Casa/Trasf: {riepilogo_stats}\n"
-                                    f"🩺 Assenze: {assenze_txt}\n"
-                                    f"📝 Analisi: {motivazione}\n"
-                                    "✅ Analisi Qualitativa Superata!"
-                                )
-                                if send_discord_alert(msg):
-                                    tracked_bets[adv_match_key] = {
-                                        "source": "gemini_advanced",
-                                        "sport": sport,
-                                        "home": home,
-                                        "away": away,
-                                        "mercato": mercato_nome,
-                                        "esito": esito_consigliato,
-                                        "prob": prob_stimata,
-                                        "min_prob": 65.0,
-                                        "status": "active",
-                                    }
-                                    save_state(tracked_bets)
-                                    time.sleep(1)
+                        if not mercato_nome or not esito_consigliato:
+                            continue
+
+                        recommended_stake = calculate_stake(prob_stimata)
+                        safe_slug = re.sub(r"[^a-zA-Z0-9]+", "_", f"{mercato_nome}_{esito_consigliato}").strip("_")
+                        adv_match_key = f"{match_key}_{safe_slug}"
+
+                        if adv_match_key not in tracked_bets:
+                            msg = (
+                                "----------------------------------------\n"
+                                "🔥 [VALUE BET AVANZATA / PLAYER PROPS] 🔥\n"
+                                f"🏆 Sport: {sport.replace('_', ' ').upper()}\n"
+                                f"⚔️ Match: {home} vs {away}\n"
+                                f"⏰ Inizio: {formatted_time}\n"
+                                f"🎯 Mercato: {mercato_nome}\n"
+                                f"📌 Esito Consigliato: **{esito_consigliato}**\n"
+                                f"📊 Probabilità Stimata: {prob_stimata}%\n"
+                                f"💵 Stake Consigliato: **{recommended_stake}**\n"
+                                f"📈 Classifica & Gol Casa/Trasf: {riepilogo_stats}\n"
+                                f"🩺 Assenze: {assenze_txt}\n"
+                                f"📝 Analisi: {motivazione}\n"
+                                "✅ Analisi Qualitativa Superata!"
+                            )
+                            if send_discord_alert(msg):
+                                tracked_bets[adv_match_key] = {
+                                    "source": "gemini_advanced",
+                                    "sport": sport,
+                                    "home": home,
+                                    "away": away,
+                                    "mercato": mercato_nome,
+                                    "esito": esito_consigliato,
+                                    "prob": prob_stimata,
+                                    "min_prob": 65.0,
+                                    "status": "active",
+                                }
+                                save_state(tracked_bets)
+                                time.sleep(1)
 
             except Exception as e:
                 print(f"❌ Errore generale nel controllo per {sport}: {e}")
@@ -656,6 +679,7 @@ def run_bot_cycle(tracked_bets):
     # 3. SWISS NATIONAL LEAGUE (NLA) VIA GEMINI
     print("🏒 Controllo Swiss National League (NLA) tramite Gemini...")
     nla_bets = analyze_swiss_nla_with_gemini(today_local_str)
+    print(f"🏒 Proposte NLA ricevute da Gemini: {len(nla_bets)}")
     allowed_nla_markets = {"1x2", "over/under gol partita", "over/under gol squadra"}
 
     for item in nla_bets:
