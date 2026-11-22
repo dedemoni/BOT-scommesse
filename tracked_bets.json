@@ -758,5 +758,126 @@
         "esito": "Utah Mammoth",
         "prob": 73.0,
         "status": "active"
+    },
+    "JuventusvsVenezia": {
+        "source": "odds_api_1x2",
+        "sport": "soccer_italy_serie_a",
+        "home": "Juventus",
+        "away": "Venezia",
+        "mercato": "1X2",
+        "esito": "Juventus",
+        "prob": 72.5,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "JuventusvsVenezia_Under_Over_Gol_Under_3_5": {
+        "source": "gemini_advanced",
+        "sport": "soccer_italy_serie_a",
+        "home": "Juventus",
+        "away": "Venezia",
+        "mercato": "Under/Over Gol",
+        "esito": "Under 3.5",
+        "prob": 70.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "JuventusvsVenezia_Goal_No_Goal_No_Goal": {
+        "source": "gemini_advanced",
+        "sport": "soccer_italy_serie_a",
+        "home": "Juventus",
+        "away": "Venezia",
+        "mercato": "Goal/No Goal",
+        "esito": "No Goal",
+        "prob": 66.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "WerderBremenvsHamburgerSV": {
+        "source": "odds_api_1x2",
+        "sport": "soccer_germany_bundesliga",
+        "home": "Werder Bremen",
+        "away": "Hamburger SV",
+        "mercato": "1X2",
+        "esito": "Werder Bremen",
+        "prob": 66.5,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "WerderBremenvsHamburgerSV_Over_Under_Gol_Over_1_5": {
+        "source": "gemini_advanced",
+        "sport": "soccer_germany_bundesliga",
+        "home": "Werder Bremen",
+        "away": "Hamburger SV",
+        "mercato": "Over/Under Gol",
+        "esito": "Over 1.5",
+        "prob": 74.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "WerderBremenvsHamburgerSV_Goal_No_Goal_Goal": {
+        "source": "gemini_advanced",
+        "sport": "soccer_germany_bundesliga",
+        "home": "Werder Bremen",
+        "away": "Hamburger SV",
+        "mercato": "Goal/No Goal",
+        "esito": "Goal",
+        "prob": 66.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "MarseillevsLeMansFC": {
+        "source": "odds_api_1x2",
+        "sport": "soccer_france_ligue_one",
+        "home": "Marseille",
+        "away": "Le Mans FC",
+        "mercato": "1X2",
+        "esito": "Marseille",
+        "prob": 73.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "MarseillevsLeMansFC_Over_Under_gol_Over_1_5": {
+        "source": "gemini_advanced",
+        "sport": "soccer_france_ligue_one",
+        "home": "Marseille",
+        "away": "Le Mans FC",
+        "mercato": "Over/Under gol",
+        "esito": "Over 1.5",
+        "prob": 78.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "MarseillevsLeMansFC_Goal_No_Goal_No_Goal": {
+        "source": "gemini_advanced",
+        "sport": "soccer_france_ligue_one",
+        "home": "Marseille",
+        "away": "Le Mans FC",
+        "mercato": "Goal/No Goal",
+        "esito": "No Goal",
+        "prob": 66.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "NewYorkRangersvsCarolinaHurricanes_Over_Under_gol_incontro_Over_5_5": {
+        "source": "gemini_advanced",
+        "sport": "icehockey_nhl",
+        "home": "New York Rangers",
+        "away": "Carolina Hurricanes",
+        "mercato": "Over/Under gol incontro",
+        "esito": "Over 5.5",
+        "prob": 66.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "NewYorkRangersvsCarolinaHurricanes_Artemi_Panarin_Punti_Over_0_5": {
+        "source": "gemini_advanced",
+        "sport": "icehockey_nhl",
+        "home": "New York Rangers",
+        "away": "Carolina Hurricanes",
+        "mercato": "Artemi Panarin Punti",
+        "esito": "Over 0.5",
+        "prob": 68.0,
+        "min_prob": 65.0,
+        "status": "active"
     }
 }
