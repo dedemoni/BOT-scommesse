@@ -13,7 +13,7 @@ from google.genai import types
 ODDS_API_KEY = os.environ.get("ODDS_API_KEY")
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemma-4-26b-it")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemma-4-26b-a4b-it")
 STATE_FILE = "tracked_bets.json"
 RUN_ONCE = os.environ.get("RUN_ONCE", "true").lower() in ("1", "true", "yes")
 POLL_INTERVAL_SECONDS = int(os.environ.get("POLL_INTERVAL_SECONDS", "1800"))
@@ -47,19 +47,6 @@ FREE_RSS_FEEDS = [
     "https://www.espn.com/espn/rss/nba/news",
     "https://www.espn.com/espn/rss/nhl/news",
 ]
-
-
-def list_available_models():
-    if not client:
-        print("⚠️ GEMINI_API_KEY non configurato: impossibile elencare i modelli.")
-        return
-    try:
-        print("📋 Elenco modelli disponibili sulla chiave:")
-        for m in client.models.list():
-            name = getattr(m, "name", "")
-            print(f"  - {name}")
-    except Exception as e:
-        print(f"⚠️ Errore nel recupero lista modelli: {e}")
 
 
 def load_state():
@@ -719,7 +706,6 @@ def run_bot_cycle(tracked_bets):
 
 
 def main():
-    list_available_models()
     tracked_bets = load_state()
     while True:
         try:
