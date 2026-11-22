@@ -19,6 +19,8 @@ RUN_ONCE = os.environ.get("RUN_ONCE", "true").lower() in ("1", "true", "yes")
 POLL_INTERVAL_SECONDS = int(os.environ.get("POLL_INTERVAL_SECONDS", "1800"))
 GEMINI_DELAY_SECONDS = float(os.environ.get("GEMINI_DELAY_SECONDS", "3.5"))
 MAX_GEMINI_CALLS_PER_CYCLE = int(os.environ.get("MAX_GEMINI_CALLS_PER_CYCLE", "15"))
+# Finestra notturna: include partite fino alle 05:00 locali del giorno successivo
+NIGHT_CUTOFF_HOUR = int(os.environ.get("NIGHT_CUTOFF_HOUR", "5"))
 # ====================================================================
 
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
@@ -229,7 +231,7 @@ def call_gemini_with_retry(prompt: str, context_label: str) -> str:
     return ""
 
 
-def analyze_match_complete_with_gemini(sport, home, away, today_str, standard_candidate=None, news_context=""):
+def analyze_match_complete_with_gemini(sport, home, away, window_label, standard_candidate=None, news_context=""):
     if not client:
         print("⚠️ GEMINI_API_KEY non configurato.")
         return {}
@@ -244,7 +246,7 @@ def analyze_match_complete_with_gemini(sport, home, away, today_str, standard_ca
         )
 
     prompt = f"""
-    Data odierna: {today_str}.
+    Finestra operativa locale: {window_label}.
     Sei un analista sportivo per lo sport: {sport}.
     Analizza la partita: {home} (Casa) vs {away} (Trasferta).
     {candidate_block}
@@ -325,20 +327,20 @@ def passes_hard_stats_filter(sport, stats, is_away_team):
         return False, f"Errore verifica stats: {e}"
 
 
-def analyze_swiss_nla_without_search(today_local_str, news_context=""):
+def analyze_swiss_nla_without_search(window_label, news_context=""):
     if not client:
         return []
 
     prompt = f"""
-    Data odierna locale: {today_local_str}.
+    Finestra operativa locale: {window_label}.
     Sei un analista di hockey su ghiaccio per la Swiss National League (NLA / NL).
     Notizie recenti (da feed gratuiti): {news_context}
 
-    Se hai informazioni affidabili su partite ufficiali della Swiss National League in programma oggi ({today_local_str}), proponi SOLO esiti con probabilità stimata >= 65.0% (e >= 70.0% se 1X2 trasferta, con quota stimata > 1.29) su questi mercati:
+    Se hai informazioni affidabili su partite ufficiali della Swiss National League in programma nella finestra indicata, proponi SOLO esiti con probabilità stimata >= 65.0% (e >= 70.0% se 1X2 trasferta, con quota stimata > 1.29) su questi mercati:
     - "1X2"
     - "Over/Under Gol Partita"
     - "Over/Under Gol Squadra"
-    Se non hai certezza sulle partite di oggi o non ci sono scommesse >= 65%, rispondi con [].
+    Se non hai certezza sulle partite in programma o non ci sono scommesse >= 65%, rispondi con [].
 
     Rispondi ESCLUSIVAMENTE con una lista JSON:
     [
@@ -376,13 +378,14 @@ def run_bot_cycle(tracked_bets):
     now_local = datetime.now(italy_tz)
 
     start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
-    end_local = start_local + timedelta(hours=31)
+    # Include partite fino alle 05:00 locali del giorno successivo (24h + NIGHT_CUTOFF_HOUR)
+    end_local = start_local + timedelta(hours=24 + NIGHT_CUTOFF_HOUR)
 
-    start_of_day = start_local.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    end_of_day = end_local.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    today_local_str = start_local.strftime("%Y-%m-%d")
+    start_utc = start_local.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    end_utc = end_local.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    window_label = f"{start_local.strftime('%Y-%m-%d %H:%M')} -> {end_local.strftime('%Y-%m-%d %H:%M')}"
 
-    print(f"📅 Data locale di riferimento: {today_local_str} (ora attuale: {now_local.strftime('%H:%M')})")
+    print(f"📅 Finestra locale di riferimento: {window_label} (ora attuale: {now_local.strftime('%H:%M')})")
     stop_cycle = False
 
     if not ODDS_API_KEY:
@@ -399,8 +402,8 @@ def run_bot_cycle(tracked_bets):
             "regions": "eu",
             "markets": "h2h",
             "oddsFormat": "decimal",
-            "commenceTimeFrom": start_of_day,
-            "commenceTimeTo": end_of_day,
+            "commenceTimeFrom": start_utc,
+            "commenceTimeTo": end_utc,
         }
         try:
             res = requests.get(url, params=params, timeout=10)
@@ -412,7 +415,7 @@ def run_bot_cycle(tracked_bets):
             if not isinstance(data, list) or not data:
                 continue
 
-            today_matches = []
+            window_matches = []
             for match in data:
                 commence_time = match.get("commence_time", "")
                 if not commence_time:
@@ -420,12 +423,12 @@ def run_bot_cycle(tracked_bets):
                 try:
                     dt_utc = datetime.fromisoformat(commence_time.replace("Z", "+00:00"))
                     dt_local = dt_utc.astimezone(italy_tz)
-                    if dt_local.strftime("%Y-%m-%d") == today_local_str:
-                        today_matches.append(match)
+                    if start_local <= dt_local <= end_local:
+                        window_matches.append(match)
                 except Exception:
                     continue
 
-            print(f"📌 [{sport}] Trovati {len(data)} match nella finestra, {len(today_matches)} di oggi.")
+            print(f"📌 [{sport}] Trovati {len(data)} match API, {len(window_matches)} nella finestra fino alle {NIGHT_CUTOFF_HOUR:02d}:00.")
 
             for match in data:
                 home = match.get("home_team")
@@ -458,7 +461,7 @@ def run_bot_cycle(tracked_bets):
                                     save_state(tracked_bets)
                                     time.sleep(1)
 
-            for match in today_matches:
+            for match in window_matches:
                 if stop_cycle:
                     break
 
@@ -530,7 +533,7 @@ def run_bot_cycle(tracked_bets):
 
                 news_ctx = fetch_free_news_snippets(home, away)
                 ai_result = analyze_match_complete_with_gemini(
-                    sport, home, away, today_local_str,
+                    sport, home, away, window_label,
                     standard_candidate=standard_candidate,
                     news_context=news_ctx,
                 )
@@ -636,7 +639,7 @@ def run_bot_cycle(tracked_bets):
     if not stop_cycle:
         print("🏒 Controllo Swiss National League (NLA) in modalità gratuita...")
         nla_news = fetch_free_news_snippets("Swiss National League", "Hockey", max_items=3)
-        nla_bets = analyze_swiss_nla_without_search(today_local_str, news_context=nla_news)
+        nla_bets = analyze_swiss_nla_without_search(window_label, news_context=nla_news)
         allowed_nla_markets = {"1x2", "over/under gol partita", "over/under gol squadra"}
 
         for item in nla_bets:
