@@ -1099,5 +1099,148 @@
         "prob": 65.0,
         "min_prob": 65.0,
         "status": "active"
+    },
+    "LevantevsElcheCF_Under_Over_Gol_Under_3_5": {
+        "source": "gemini_advanced",
+        "sport": "soccer_spain_la_liga",
+        "home": "Levante",
+        "away": "Elche CF",
+        "mercato": "Under/Over Gol",
+        "esito": "Under 3.5",
+        "prob": 72.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "LevantevsElcheCF_Goal_No_Goal_No_Goal": {
+        "source": "gemini_advanced",
+        "sport": "soccer_spain_la_liga",
+        "home": "Levante",
+        "away": "Elche CF",
+        "mercato": "Goal/No Goal",
+        "esito": "No Goal",
+        "prob": 66.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "CharlotteHornetsvsMemphisGrizzlies_Memphis_Grizzlies_Totale_Punti_Squadra_Over": {
+        "source": "gemini_advanced",
+        "sport": "basketball_nba",
+        "home": "Charlotte Hornets",
+        "away": "Memphis Grizzlies",
+        "mercato": "Memphis Grizzlies - Totale Punti Squadra",
+        "esito": "Over",
+        "prob": 68.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "CharlotteHornetsvsMemphisGrizzlies_Ja_Morant_Punti_Assist_Over": {
+        "source": "gemini_advanced",
+        "sport": "basketball_nba",
+        "home": "Charlotte Hornets",
+        "away": "Memphis Grizzlies",
+        "mercato": "Ja Morant - Punti + Assist",
+        "esito": "Over",
+        "prob": 66.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "Philadelphia76ersvsPortlandTrailBlazers_Handicap_NBA_Philadelphia_7_5": {
+        "source": "gemini_advanced",
+        "sport": "basketball_nba",
+        "home": "Philadelphia 76ers",
+        "away": "Portland Trail Blazers",
+        "mercato": "Handicap NBA",
+        "esito": "Philadelphia -7.5",
+        "prob": 68.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "Philadelphia76ersvsPortlandTrailBlazers_Total_Points_Over_Under_Over_224_5": {
+        "source": "gemini_advanced",
+        "sport": "basketball_nba",
+        "home": "Philadelphia 76ers",
+        "away": "Portland Trail Blazers",
+        "mercato": "Total Points (Over/Under)",
+        "esito": "Over 224.5",
+        "prob": 66.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "MinnesotaTimberwolvesvsBrooklynNets_Handicap_Minnesota_6_5": {
+        "source": "gemini_advanced",
+        "sport": "basketball_nba",
+        "home": "Minnesota Timberwolves",
+        "away": "Brooklyn Nets",
+        "mercato": "Handicap",
+        "esito": "Minnesota -6.5",
+        "prob": 67.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "MinnesotaTimberwolvesvsBrooklynNets_Player_Prop_Anthony_Edwards_Over_26_5_punti": {
+        "source": "gemini_advanced",
+        "sport": "basketball_nba",
+        "home": "Minnesota Timberwolves",
+        "away": "Brooklyn Nets",
+        "mercato": "Player Prop - Anthony Edwards",
+        "esito": "Over 26.5 punti",
+        "prob": 68.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "IndianaPacersvsOklahomaCityThunder": {
+        "source": "odds_api_1x2",
+        "sport": "basketball_nba",
+        "home": "Indiana Pacers",
+        "away": "Oklahoma City Thunder",
+        "mercato": "1X2",
+        "esito": "Oklahoma City Thunder",
+        "prob": 72.5,
+        "min_prob": 70.0,
+        "status": "active"
+    },
+    "IndianaPacersvsOklahomaCityThunder_Total_Points_Over_228_5": {
+        "source": "gemini_advanced",
+        "sport": "basketball_nba",
+        "home": "Indiana Pacers",
+        "away": "Oklahoma City Thunder",
+        "mercato": "Total Points",
+        "esito": "Over 228.5",
+        "prob": 66.5,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "IndianaPacersvsOklahomaCityThunder_Player_Prop_Shai_Gilgeous_Alexander_Over_30_5_Punti": {
+        "source": "gemini_advanced",
+        "sport": "basketball_nba",
+        "home": "Indiana Pacers",
+        "away": "Oklahoma City Thunder",
+        "mercato": "Player Prop: Shai Gilgeous-Alexander",
+        "esito": "Over 30.5 Punti",
+        "prob": 68.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "TorontoRaptorsvsMilwaukeeBucks_Giannis_Antetokounmpo_Punti_Totali_Over_27_5": {
+        "source": "gemini_advanced",
+        "sport": "basketball_nba",
+        "home": "Toronto Raptors",
+        "away": "Milwaukee Bucks",
+        "mercato": "Giannis Antetokounmpo - Punti Totali",
+        "esito": "Over 27.5",
+        "prob": 69.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "TorontoRaptorsvsMilwaukeeBucks_Totale_Punti_Incontro_Over_226_5": {
+        "source": "gemini_advanced",
+        "sport": "basketball_nba",
+        "home": "Toronto Raptors",
+        "away": "Milwaukee Bucks",
+        "mercato": "Totale Punti Incontro",
+        "esito": "Over 226.5",
+        "prob": 66.0,
+        "min_prob": 65.0,
+        "status": "active"
     }
 }
