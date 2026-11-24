@@ -1484,5 +1484,27 @@
         "prob": 68.0,
         "min_prob": 65.0,
         "status": "active"
+    },
+    "EdmontonOilersvsVegasGoldenKnights_Total_Goals_Over_Under_Over_5_5": {
+        "source": "gemini_advanced",
+        "sport": "icehockey_nhl",
+        "home": "Edmonton Oilers",
+        "away": "Vegas Golden Knights",
+        "mercato": "Total Goals (Over/Under)",
+        "esito": "Over 5.5",
+        "prob": 68.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "EdmontonOilersvsVegasGoldenKnights_Player_Prop_Connor_McDavid_Over_1_5_punti_Goal_Assist": {
+        "source": "gemini_advanced",
+        "sport": "icehockey_nhl",
+        "home": "Edmonton Oilers",
+        "away": "Vegas Golden Knights",
+        "mercato": "Player Prop: Connor McDavid",
+        "esito": "Over 1.5 punti (Goal/Assist)",
+        "prob": 72.0,
+        "min_prob": 65.0,
+        "status": "active"
     }
 }
