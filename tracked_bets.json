@@ -1506,5 +1506,93 @@
         "prob": 72.0,
         "min_prob": 65.0,
         "status": "active"
+    },
+    "ManchesterCityvsNapoli": {
+        "source": "odds_api_1x2",
+        "sport": "soccer_uefa_champs_league",
+        "home": "Manchester City",
+        "away": "Napoli",
+        "mercato": "1X2",
+        "esito": "Manchester City",
+        "prob": 70.5,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "ManchesterCityvsNapoli_Over_Under_Gol_Over_1_5": {
+        "source": "gemini_advanced",
+        "sport": "soccer_uefa_champs_league",
+        "home": "Manchester City",
+        "away": "Napoli",
+        "mercato": "Over/Under Gol",
+        "esito": "Over 1.5",
+        "prob": 78.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "ManchesterCityvsNapoli_Goal_No_Goal_Goal": {
+        "source": "gemini_advanced",
+        "sport": "soccer_uefa_champs_league",
+        "home": "Manchester City",
+        "away": "Napoli",
+        "mercato": "Goal/No Goal",
+        "esito": "Goal",
+        "prob": 66.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "OrlandoMagicvsDetroitPistons_Handicap_Spread_Orlando_Magic_6_5": {
+        "source": "gemini_advanced",
+        "sport": "basketball_nba",
+        "home": "Orlando Magic",
+        "away": "Detroit Pistons",
+        "mercato": "Handicap (Spread)",
+        "esito": "Orlando Magic -6.5",
+        "prob": 68.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "OrlandoMagicvsDetroitPistons_Paolo_Banchero_Punti_Over_24_5": {
+        "source": "gemini_advanced",
+        "sport": "basketball_nba",
+        "home": "Orlando Magic",
+        "away": "Detroit Pistons",
+        "mercato": "Paolo Banchero Punti",
+        "esito": "Over 24.5",
+        "prob": 66.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "DenverNuggetsvsDallasMavericks": {
+        "source": "odds_api_1x2",
+        "sport": "basketball_nba",
+        "home": "Denver Nuggets",
+        "away": "Dallas Mavericks",
+        "mercato": "1X2",
+        "esito": "Denver Nuggets",
+        "prob": 74.5,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "DenverNuggetsvsDallasMavericks_Total_Punti_Over_Under_Over_224_5": {
+        "source": "gemini_advanced",
+        "sport": "basketball_nba",
+        "home": "Denver Nuggets",
+        "away": "Dallas Mavericks",
+        "mercato": "Total Punti (Over/Under)",
+        "esito": "Over 224.5",
+        "prob": 66.5,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "DenverNuggetsvsDallasMavericks_Nikola_Jokic_Player_Prop_Over_12_5_rimbalzi": {
+        "source": "gemini_advanced",
+        "sport": "basketball_nba",
+        "home": "Denver Nuggets",
+        "away": "Dallas Mavericks",
+        "mercato": "Nikola Jokic Player Prop",
+        "esito": "Over 12.5 rimbalzi",
+        "prob": 67.0,
+        "min_prob": 65.0,
+        "status": "active"
     }
 }
