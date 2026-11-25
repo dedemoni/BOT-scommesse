@@ -1594,5 +1594,192 @@
         "prob": 67.0,
         "min_prob": 65.0,
         "status": "active"
+    },
+    "InterMilanvsVfBStuttgart": {
+        "source": "odds_api_1x2",
+        "sport": "soccer_uefa_champs_league",
+        "home": "Inter Milan",
+        "away": "VfB Stuttgart",
+        "mercato": "1X2",
+        "esito": "Inter Milan",
+        "prob": 70.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "InterMilanvsVfBStuttgart_Over_Under_Gol_Over_1_5": {
+        "source": "gemini_advanced",
+        "sport": "soccer_uefa_champs_league",
+        "home": "Inter Milan",
+        "away": "VfB Stuttgart",
+        "mercato": "Over/Under Gol",
+        "esito": "Over 1.5",
+        "prob": 75.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "CharlotteHornetsvsChicagoBulls": {
+        "source": "odds_api_1x2",
+        "sport": "basketball_nba",
+        "home": "Charlotte Hornets",
+        "away": "Chicago Bulls",
+        "mercato": "1X2",
+        "esito": "Charlotte Hornets",
+        "prob": 67.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "CharlotteHornetsvsChicagoBulls_Total_Points_Over_220_5": {
+        "source": "gemini_advanced",
+        "sport": "basketball_nba",
+        "home": "Charlotte Hornets",
+        "away": "Chicago Bulls",
+        "mercato": "Total Points",
+        "esito": "Over 220.5",
+        "prob": 65.5,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "NewYorkKnicksvsClevelandCavaliers_Total_Punti_Incontro_Under_226_5": {
+        "source": "gemini_advanced",
+        "sport": "basketball_nba",
+        "home": "New York Knicks",
+        "away": "Cleveland Cavaliers",
+        "mercato": "Total Punti Incontro",
+        "esito": "Under 226.5",
+        "prob": 66.5,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "NewYorkKnicksvsClevelandCavaliers_Jalen_Brunson_Player_Prop_Over_6_5_Assist": {
+        "source": "gemini_advanced",
+        "sport": "basketball_nba",
+        "home": "New York Knicks",
+        "away": "Cleveland Cavaliers",
+        "mercato": "Jalen Brunson Player Prop",
+        "esito": "Over 6.5 Assist",
+        "prob": 67.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "OklahomaCityThundervsMinnesotaTimberwolves_Player_Prop_Shai_Gilgeous_Alexander_OKC_Over_27_5_Punti": {
+        "source": "gemini_advanced",
+        "sport": "basketball_nba",
+        "home": "Oklahoma City Thunder",
+        "away": "Minnesota Timberwolves",
+        "mercato": "Player Prop - Shai Gilgeous-Alexander (OKC)",
+        "esito": "Over 27.5 Punti",
+        "prob": 67.5,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "OklahomaCityThundervsMinnesotaTimberwolves_Totale_Punti_Incontro_Under_228_5": {
+        "source": "gemini_advanced",
+        "sport": "basketball_nba",
+        "home": "Oklahoma City Thunder",
+        "away": "Minnesota Timberwolves",
+        "mercato": "Totale Punti Incontro",
+        "esito": "Under 228.5",
+        "prob": 66.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "MilwaukeeBucksvsBrooklynNets_Milwaukee_Bucks_Total_Points_Over_114_5": {
+        "source": "gemini_advanced",
+        "sport": "basketball_nba",
+        "home": "Milwaukee Bucks",
+        "away": "Brooklyn Nets",
+        "mercato": "Milwaukee Bucks Total Points",
+        "esito": "Over 114.5",
+        "prob": 68.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "MilwaukeeBucksvsBrooklynNets_Giannis_Antetokounmpo_Points_Over_28_5": {
+        "source": "gemini_advanced",
+        "sport": "basketball_nba",
+        "home": "Milwaukee Bucks",
+        "away": "Brooklyn Nets",
+        "mercato": "Giannis Antetokounmpo Points",
+        "esito": "Over 28.5",
+        "prob": 67.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "MemphisGrizzliesvsLosAngelesClippers": {
+        "source": "odds_api_1x2",
+        "sport": "basketball_nba",
+        "home": "Memphis Grizzlies",
+        "away": "Los Angeles Clippers",
+        "mercato": "1X2",
+        "esito": "Memphis Grizzlies",
+        "prob": 74.5,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "MemphisGrizzliesvsLosAngelesClippers_Total_Points_Over_222_5": {
+        "source": "gemini_advanced",
+        "sport": "basketball_nba",
+        "home": "Memphis Grizzlies",
+        "away": "Los Angeles Clippers",
+        "mercato": "Total Points",
+        "esito": "Over 222.5",
+        "prob": 66.5,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "GoldenStateWarriorsvsSacramentoKings": {
+        "source": "odds_api_1x2",
+        "sport": "basketball_nba",
+        "home": "Golden State Warriors",
+        "away": "Sacramento Kings",
+        "mercato": "1X2",
+        "esito": "Golden State Warriors",
+        "prob": 75.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "GoldenStateWarriorsvsSacramentoKings_Total_Points_Over_228_5": {
+        "source": "gemini_advanced",
+        "sport": "basketball_nba",
+        "home": "Golden State Warriors",
+        "away": "Sacramento Kings",
+        "mercato": "Total Points",
+        "esito": "Over 228.5",
+        "prob": 67.5,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "PortlandTrailBlazersvsSanAntonioSpurs_Victor_Wembanyama_Over_3_5_Contrasti_Blocks_Over_3_5": {
+        "source": "gemini_advanced",
+        "sport": "basketball_nba",
+        "home": "Portland Trail Blazers",
+        "away": "San Antonio Spurs",
+        "mercato": "Victor Wembanyama - Over 3.5 Contrasti (Blocks)",
+        "esito": "Over 3.5",
+        "prob": 72.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "PortlandTrailBlazersvsSanAntonioSpurs_Totale_Punti_Match_Over_226_5": {
+        "source": "gemini_advanced",
+        "sport": "basketball_nba",
+        "home": "Portland Trail Blazers",
+        "away": "San Antonio Spurs",
+        "mercato": "Totale Punti (Match)",
+        "esito": "Over 226.5",
+        "prob": 66.0,
+        "min_prob": 65.0,
+        "status": "active"
+    },
+    "BostonBruinsvsWinnipegJets_Total_Goals_Over_Under_5_5_Over_4_5": {
+        "source": "gemini_advanced",
+        "sport": "icehockey_nhl",
+        "home": "Boston Bruins",
+        "away": "Winnipeg Jets",
+        "mercato": "Total Goals (Over/Under 5.5)",
+        "esito": "Over 4.5",
+        "prob": 67.5,
+        "min_prob": 65.0,
+        "status": "active"
     }
 }
