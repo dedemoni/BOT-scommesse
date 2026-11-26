@@ -18,9 +18,9 @@ STATE_FILE = "tracked_bets.json"
 RUN_ONCE = os.environ.get("RUN_ONCE", "true").lower() in ("1", "true", "yes")
 POLL_INTERVAL_SECONDS = int(os.environ.get("POLL_INTERVAL_SECONDS", "1800"))
 
-# Limiti Gemini (al minuto / ciclo)
+# Limiti Gemini (al minuto): nessun taglio per numero di partite, attesa/retry su 429
 GEMINI_DELAY_SECONDS = float(os.environ.get("GEMINI_DELAY_SECONDS", "4.0"))
-MAX_GEMINI_CALLS_PER_CYCLE = int(os.environ.get("MAX_GEMINI_CALLS_PER_CYCLE", "14"))
+MAX_GEMINI_CALLS_PER_CYCLE = int(os.environ.get("MAX_GEMINI_CALLS_PER_CYCLE", "9999"))
 
 # Limiti The Odds API (protezione plafond mensile)
 ODDS_API_MIN_REMAINING = int(os.environ.get("ODDS_API_MIN_REMAINING", "25"))
@@ -209,13 +209,10 @@ def call_gemini_with_retry(prompt: str, context_label: str) -> str:
         return ""
 
     if gemini_calls_this_cycle >= MAX_GEMINI_CALLS_PER_CYCLE:
-        print(
-            f"🛡️ Raggiunto tetto di {MAX_GEMINI_CALLS_PER_CYCLE} chiamate Gemini per questo ciclo. "
-            "Mi fermo per rispettare i limiti."
-        )
-        return "CYCLE_CAP_REACHED"
+        print(f"⚠️ Raggiunto limite configurato di {MAX_GEMINI_CALLS_PER_CYCLE} chiamate su {context_label}.")
+        return ""
 
-    for attempt in range(2):
+    for attempt in range(3):
         try:
             time.sleep(GEMINI_DELAY_SECONDS)
             gemini_calls_this_cycle += 1
@@ -230,14 +227,13 @@ def call_gemini_with_retry(prompt: str, context_label: str) -> str:
         except Exception as e:
             err_str = str(e)
             if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                if attempt == 0:
-                    print(f"⏳ Limite al minuto/richieste (429) su {context_label}: attendo 65s e riprovo...")
-                    time.sleep(65)
-                    continue
-                print(f"🛑 Limite 429 persistente su {context_label} con modello {GEMINI_MODEL}.")
-                return "QUOTA_EXCEEDED"
+                wait_s = 65 if attempt == 0 else 75
+                print(f"⏳ Limite al minuto/richieste (429) su {context_label} (tentativo {attempt + 1}/3): attendo {wait_s}s...")
+                time.sleep(wait_s)
+                continue
             print(f"⚠️ Errore Gemini su {context_label}: {e}")
             return ""
+    print(f"⚠️ Limite 429 non superato dopo 3 tentativi su {context_label}; proseguo con i match successivi.")
     return ""
 
 
@@ -293,8 +289,6 @@ def analyze_match_1x2_with_gemini(sport, home, away, match_time_local, standard_
     """
 
     raw_text = call_gemini_with_retry(prompt, f"{home} vs {away}")
-    if raw_text in ("QUOTA_EXCEEDED", "CYCLE_CAP_REACHED"):
-        return {"_stop_cycle": True}
     if not raw_text:
         return {}
 
@@ -327,11 +321,69 @@ def passes_hard_stats_filter(stats, is_away_team):
         return False, f"Errore verifica stats: {e}"
 
 
+def extract_standard_candidate(match, home, away):
+    bookmakers = match.get("bookmakers", [])
+    book, outcomes = find_first_valid_bookmaker(bookmakers)
+    if not outcomes:
+        return None
+
+    outcomes_map = {}
+    for bookmaker in bookmakers:
+        markets = bookmaker.get("markets", [])
+        if markets:
+            for out in markets[0].get("outcomes", []):
+                name = out.get("name")
+                price = out.get("price")
+                if name and price:
+                    outcomes_map.setdefault(name, []).append(price)
+
+    probs_dict = {}
+    for out in outcomes:
+        name = out.get("name")
+        price = out.get("price")
+        if not name or not price:
+            continue
+        if name in outcomes_map and len(outcomes_map[name]) > 1:
+            avg_price = sum(outcomes_map[name]) / len(outcomes_map[name])
+            if price > avg_price * 1.15:
+                continue
+        p = round(((1 / price) * 100) + 4.5, 1)
+        probs_dict[name] = min(p, 95.0)
+
+    if len(probs_dict) < 2:
+        return None
+
+    sorted_p = sorted(probs_dict.values(), reverse=True)
+    if (sorted_p[0] - sorted_p[1]) < 12.0:
+        return None
+
+    for out in outcomes:
+        name = out.get("name")
+        if name not in probs_dict:
+            continue
+        price = out.get("price")
+        base_prob = probs_dict[name]
+        is_away_team = (name == away)
+        min_prob_required = 70.0 if is_away_team else 65.0
+
+        if price > 1.29 and base_prob >= min_prob_required:
+            return {
+                "esito": name,
+                "is_away": is_away_team,
+                "quota": price,
+                "book": book,
+                "base_prob": base_prob,
+                "min_prob": min_prob_required,
+            }
+
+    return None
+
+
 def run_bot_cycle(tracked_bets):
     global gemini_calls_this_cycle, odds_quota_exhausted
     gemini_calls_this_cycle = 0
 
-    print(f"🔄 Avvio ciclo 1X2 (Calcio, NBA, NHL | Odds API + {GEMINI_MODEL})...")
+    print(f"🔄 Avvio ciclo 1X2 completo (Calcio, NBA, NHL | Odds API + {GEMINI_MODEL})...")
     sports_to_check = list(LEAGUE_MAPPING.values()) + ALWAYS_ACTIVE_SPORTS
 
     italy_tz = ZoneInfo("Europe/Rome")
@@ -346,7 +398,7 @@ def run_bot_cycle(tracked_bets):
     window_label = f"{start_local.strftime('%Y-%m-%d %H:%M')} -> {end_local.strftime('%Y-%m-%d %H:%M')}"
 
     print(f"📅 Finestra locale di riferimento: {window_label} (ora attuale: {now_local.strftime('%H:%M')})")
-    stop_cycle = False
+    queued_candidates = []
 
     if not ODDS_API_KEY:
         print("⚠️ ODDS_API_KEY non configurato.")
@@ -357,7 +409,7 @@ def run_bot_cycle(tracked_bets):
         return
 
     for sport in sports_to_check:
-        if stop_cycle or odds_quota_exhausted:
+        if odds_quota_exhausted:
             break
 
         if odds_remaining_requests is not None and odds_remaining_requests <= ODDS_API_MIN_REMAINING:
@@ -437,11 +489,8 @@ def run_bot_cycle(tracked_bets):
                                     save_state(tracked_bets)
                                     time.sleep(1)
 
-            # 2) Valuta le partite della finestra corrente solo su mercato 1X2
+            # 2) Raccoglie tutte le candidature 1X2 valide della finestra
             for match in window_matches:
-                if stop_cycle:
-                    break
-
                 commence_time = match.get("commence_time", "")
                 home = match.get("home_team")
                 away = match.get("away_team")
@@ -452,132 +501,99 @@ def run_bot_cycle(tracked_bets):
                 if match_key in tracked_bets:
                     continue
 
-                formatted_time = format_match_time(commence_time)
-                standard_candidate = None
-                bookmakers = match.get("bookmakers", [])
-                book, outcomes = find_first_valid_bookmaker(bookmakers)
-
-                if outcomes:
-                    outcomes_map = {}
-                    for bookmaker in bookmakers:
-                        markets = bookmaker.get("markets", [])
-                        if markets:
-                            for out in markets[0].get("outcomes", []):
-                                name = out.get("name")
-                                price = out.get("price")
-                                if name and price:
-                                    outcomes_map.setdefault(name, []).append(price)
-
-                    probs_dict = {}
-                    for out in outcomes:
-                        name = out.get("name")
-                        price = out.get("price")
-                        if not name or not price:
-                            continue
-                        if name in outcomes_map and len(outcomes_map[name]) > 1:
-                            avg_price = sum(outcomes_map[name]) / len(outcomes_map[name])
-                            if price > avg_price * 1.15:
-                                continue
-                        p = round(((1 / price) * 100) + 4.5, 1)
-                        probs_dict[name] = min(p, 95.0)
-
-                    if len(probs_dict) >= 2:
-                        sorted_p = sorted(probs_dict.values(), reverse=True)
-                        if (sorted_p[0] - sorted_p[1]) >= 12.0:
-                            for out in outcomes:
-                                name = out.get("name")
-                                if name not in probs_dict:
-                                    continue
-                                price = out.get("price")
-                                base_prob = probs_dict[name]
-                                is_away_team = (name == away)
-                                min_prob_required = 70.0 if is_away_team else 65.0
-
-                                if price > 1.29 and base_prob >= min_prob_required:
-                                    standard_candidate = {
-                                        "esito": name,
-                                        "is_away": is_away_team,
-                                        "quota": price,
-                                        "book": book,
-                                        "base_prob": base_prob,
-                                        "min_prob": min_prob_required,
-                                    }
-                                    break
-
-                if not standard_candidate:
+                candidate = extract_standard_candidate(match, home, away)
+                if not candidate:
                     continue
 
-                news_ctx = fetch_free_news_snippets(home, away)
-                ai_result = analyze_match_1x2_with_gemini(
-                    sport,
-                    home,
-                    away,
-                    formatted_time,
-                    standard_candidate=standard_candidate,
-                    news_context=news_ctx,
-                )
-                if not ai_result:
-                    continue
-                if ai_result.get("_stop_cycle"):
-                    stop_cycle = True
-                    break
-
-                stats_obj = ai_result.get("stats", {})
-                assenze_txt = ai_result.get("assenze_infortuni", "Da verificare")
-                std_eval = ai_result.get("standard_1x2", {})
-                final_prob = min(round(float(std_eval.get("probabilita_finale", 0) or 0), 1), 95.0)
-                min_req = standard_candidate["min_prob"]
-
-                hard_ok, _ = passes_hard_stats_filter(stats_obj, standard_candidate["is_away"])
-                ai_approved = bool(std_eval.get("approvata", False)) and (final_prob >= min_req)
-
-                if hard_ok and ai_approved:
-                    recommended_stake = calculate_stake(final_prob)
-                    classifica_forma = stats_obj.get("classifica_e_forma", "N/D")
-                    h2h_txt = stats_obj.get("scontri_diretti", "N/D")
-                    gol_punti_txt = stats_obj.get("gol_o_punti_fatti_subiti", "N/D")
-                    campo_stanchezza_txt = stats_obj.get("fattore_campo_e_stanchezza", "N/D")
-                    motivazione = std_eval.get("motivazione", "")
-
-                    msg = (
-                        "----------------------------------------\n"
-                        "💎 [VALUE BET 1X2 CONFERMATA] 💎\n"
-                        f"🏆 Sport: {sport.replace('_', ' ').upper()}\n"
-                        f"⚔️ Match: {home} vs {away}\n"
-                        f"⏰ Inizio: {formatted_time}\n"
-                        f"🎯 Esito (1X2): **{standard_candidate['esito']}** {'(Trasferta)' if standard_candidate['is_away'] else '(Casa)'}\n"
-                        f"💰 Quota Reale: {standard_candidate['quota']} ({standard_candidate['book']})\n"
-                        f"📊 Probabilità Stimata: {final_prob}%\n"
-                        f"💵 Stake: **{recommended_stake}**\n"
-                        f"📊 Classifica & Ultime 5: {classifica_forma}\n"
-                        f"🆚 Scontri Diretti (H2H): {h2h_txt}\n"
-                        f"⚽🏀 Gol/Punti Fatti e Subiti: {gol_punti_txt}\n"
-                        f"🏟️🔋 Campo & Stanchezza: {campo_stanchezza_txt}\n"
-                        f"🩺 Assenze & Infortuni: {assenze_txt}\n"
-                        f"📝 Perché e come abbiamo scelto: {motivazione}\n"
-                        "✅ Tutti i Filtri 1X2 Superati!"
-                    )
-                    if send_discord_alert(msg):
-                        tracked_bets[match_key] = {
-                            "source": "odds_api_1x2",
-                            "sport": sport,
-                            "home": home,
-                            "away": away,
-                            "mercato": "1X2",
-                            "esito": standard_candidate["esito"],
-                            "quota": standard_candidate["quota"],
-                            "prob": final_prob,
-                            "min_prob": min_req,
-                            "status": "active",
-                        }
-                        save_state(tracked_bets)
-                        time.sleep(1)
+                queued_candidates.append({
+                    "sport": sport,
+                    "home": home,
+                    "away": away,
+                    "match_key": match_key,
+                    "formatted_time": format_match_time(commence_time),
+                    "candidate": candidate,
+                })
 
         except Exception as e:
             print(f"❌ Errore generale nel controllo per {sport}: {e}")
 
+    # Ordina le opportunità migliori per probabilità base decrescente
+    queued_candidates.sort(key=lambda item: item["candidate"]["base_prob"], reverse=True)
+    print(f"🎯 Candidature 1X2 valide da analizzare in questo ciclo: {len(queued_candidates)}")
+
+    for item in queued_candidates:
+        sport = item["sport"]
+        home = item["home"]
+        away = item["away"]
+        match_key = item["match_key"]
+        formatted_time = item["formatted_time"]
+        standard_candidate = item["candidate"]
+
+        news_ctx = fetch_free_news_snippets(home, away)
+        ai_result = analyze_match_1x2_with_gemini(
+            sport,
+            home,
+            away,
+            formatted_time,
+            standard_candidate=standard_candidate,
+            news_context=news_ctx,
+        )
+        if not ai_result:
+            continue
+
+        stats_obj = ai_result.get("stats", {})
+        assenze_txt = ai_result.get("assenze_infortuni", "Da verificare")
+        std_eval = ai_result.get("standard_1x2", {})
+        final_prob = min(round(float(std_eval.get("probabilita_finale", 0) or 0), 1), 95.0)
+        min_req = standard_candidate["min_prob"]
+
+        hard_ok, _ = passes_hard_stats_filter(stats_obj, standard_candidate["is_away"])
+        ai_approved = bool(std_eval.get("approvata", False)) and (final_prob >= min_req)
+
+        if hard_ok and ai_approved:
+            recommended_stake = calculate_stake(final_prob)
+            classifica_forma = stats_obj.get("classifica_e_forma", "N/D")
+            h2h_txt = stats_obj.get("scontri_diretti", "N/D")
+            gol_punti_txt = stats_obj.get("gol_o_punti_fatti_subiti", "N/D")
+            campo_stanchezza_txt = stats_obj.get("fattore_campo_e_stanchezza", "N/D")
+            motivazione = std_eval.get("motivazione", "")
+
+            msg = (
+                "----------------------------------------\n"
+                "💎 [VALUE BET 1X2 CONFERMATA] 💎\n"
+                f"🏆 Sport: {sport.replace('_', ' ').upper()}\n"
+                f"⚔️ Match: {home} vs {away}\n"
+                f"⏰ Inizio: {formatted_time}\n"
+                f"🎯 Esito (1X2): **{standard_candidate['esito']}** {'(Trasferta)' if standard_candidate['is_away'] else '(Casa)'}\n"
+                f"💰 Quota Reale: {standard_candidate['quota']} ({standard_candidate['book']})\n"
+                f"📊 Probabilità Stimata: {final_prob}%\n"
+                f"💵 Stake: **{recommended_stake}**\n"
+                f"📊 Classifica & Ultime 5: {classifica_forma}\n"
+                f"🆚 Scontri Diretti (H2H): {h2h_txt}\n"
+                f"⚽🏀 Gol/Punti Fatti e Subiti: {gol_punti_txt}\n"
+                f"🏟️🔋 Campo & Stanchezza: {campo_stanchezza_txt}\n"
+                f"🩺 Assenze & Infortuni: {assenze_txt}\n"
+                f"📝 Perché e come abbiamo scelto: {motivazione}\n"
+                "✅ Tutti i Filtri 1X2 Superati!"
+            )
+            if send_discord_alert(msg):
+                tracked_bets[match_key] = {
+                    "source": "odds_api_1x2",
+                    "sport": sport,
+                    "home": home,
+                    "away": away,
+                    "mercato": "1X2",
+                    "esito": standard_candidate["esito"],
+                    "quota": standard_candidate["quota"],
+                    "prob": final_prob,
+                    "min_prob": min_req,
+                    "status": "active",
+                }
+                save_state(tracked_bets)
+                time.sleep(1)
+
     print(
-        f"📊 Riepilogo ciclo — Chiamate Gemini: {gemini_calls_this_cycle}/{MAX_GEMINI_CALLS_PER_CYCLE} | "
+        f"📊 Riepilogo ciclo — Chiamate Gemini: {gemini_calls_this_cycle} | "
         f"Quote residue Odds API: {odds_remaining_requests if odds_remaining_requests is not None else 'N/D'}"
     )
 
