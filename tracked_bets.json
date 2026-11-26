@@ -1781,5 +1781,17 @@
         "prob": 67.5,
         "min_prob": 65.0,
         "status": "active"
+    },
+    "TSGHoffenheimvsSKSturmGraz": {
+        "source": "odds_api_1x2",
+        "sport": "soccer_uefa_europa_league",
+        "home": "TSG Hoffenheim",
+        "away": "SK Sturm Graz",
+        "mercato": "1X2",
+        "esito": "TSG Hoffenheim",
+        "quota": 1.32,
+        "prob": 74.5,
+        "min_prob": 65.0,
+        "status": "active"
     }
 }
