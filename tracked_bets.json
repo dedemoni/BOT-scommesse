@@ -1793,5 +1793,19 @@
         "prob": 74.5,
         "min_prob": 65.0,
         "status": "active"
+    },
+    "PortlandTrailBlazersvsGoldenStateWarriors": {
+        "source": "odds_api_1x2",
+        "sport": "basketball_nba",
+        "home": "Portland Trail Blazers",
+        "away": "Golden State Warriors",
+        "mercato": "1X2",
+        "esito": "Portland Trail Blazers",
+        "book": "Betfair",
+        "quota": 1.37,
+        "prob": 0.0,
+        "min_prob": 65.0,
+        "status": "rejected",
+        "reason": "Prob/approvazione non superata (0.0% vs 65.0%)"
     }
 }
