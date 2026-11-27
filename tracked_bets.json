@@ -229,7 +229,11 @@
         "away": "Philadelphia 76ers",
         "esito": "Philadelphia 76ers",
         "prob": 71.2,
-        "status": "active"
+        "status": "active",
+        "closing_quota": 1.53,
+        "closing_updated_at": "2026-11-27T23:05:07+01:00",
+        "commence_time_local": "2026-11-28T01:40:00+01:00",
+        "result": "pending_result"
     },
     "Toronto RaptorsvsOrlando Magic": {
         "sport": "basketball_nba",
@@ -1806,7 +1810,12 @@
         "prob": 0.0,
         "min_prob": 65.0,
         "status": "rejected",
-        "reason": "Prob/approvazione non superata (0.0% vs 65.0%)"
+        "reason": "Prob/approvazione non superata (0.0% vs 65.0%)",
+        "initial_quota": 1.37,
+        "closing_quota": 1.36,
+        "closing_updated_at": "2026-11-27T23:05:07+01:00",
+        "commence_time_local": "2026-11-28T03:40:00+01:00",
+        "odds_move_pct": -0.73
     },
     "NewYorkKnicksvsMiamiHeat": {
         "source": "odds_api_1x2",
@@ -1819,6 +1828,14 @@
         "quota": 1.65,
         "prob": 65.1,
         "min_prob": 65.0,
-        "status": "active"
+        "status": "revoked",
+        "initial_quota": 1.65,
+        "closing_quota": 1.68,
+        "closing_updated_at": "2026-11-27T23:05:05+01:00",
+        "commence_time_local": "2026-11-28T01:10:00+01:00",
+        "odds_move_pct": 1.82,
+        "result": "pending_result",
+        "revoked_price": 1.68,
+        "revoked_at": "2026-11-27T23:05:06+01:00"
     }
 }
