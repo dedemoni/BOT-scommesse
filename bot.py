@@ -36,6 +36,7 @@ client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 gemini_calls_this_cycle = 0
 odds_remaining_requests = None
 odds_quota_exhausted = False
+_rss_cache = {}
 
 LEAGUE_MAPPING = {
     "SA": "soccer_italy_serie_a",
@@ -54,11 +55,60 @@ ALWAYS_ACTIVE_SPORTS = [
     "icehockey_nhl",
 ]
 
-FREE_RSS_FEEDS = [
-    "https://www.espn.com/espn/rss/soccer/news",
-    "https://www.espn.com/espn/rss/nba/news",
-    "https://www.espn.com/espn/rss/nhl/news",
-]
+RSS_FEEDS_BY_SPORT = {
+    "soccer": [
+        "https://www.espn.com/espn/rss/soccer/news",
+        "https://feeds.bbci.co.uk/sport/football/rss.xml",
+        "https://www.skysports.com/rss/0,20514,11095,00.xml",
+    ],
+    "nba": [
+        "https://www.espn.com/espn/rss/nba/news",
+    ],
+    "nhl": [
+        "https://www.espn.com/espn/rss/nhl/news",
+    ],
+}
+
+TEAM_ALIASES = {
+    "paris saint germain": ["psg", "paris"],
+    "inter milan": ["inter", "internazionale"],
+    "ac milan": ["milan"],
+    "atletico madrid": ["atletico"],
+    "bayern munich": ["bayern"],
+    "borussia dortmund": ["dortmund"],
+    "manchester united": ["man utd", "manchester united"],
+    "manchester city": ["man city", "manchester city"],
+    "tottenham hotspur": ["tottenham", "spurs"],
+    "wolverhampton wanderers": ["wolves", "wolverhampton"],
+    "newcastle united": ["newcastle"],
+    "west ham united": ["west ham"],
+    "brighton and hove albion": ["brighton"],
+    "nottingham forest": ["forest", "nottingham"],
+    "real sociedad": ["sociedad"],
+    "athletic bilbao": ["bilbao", "athletic club"],
+    "los angeles lakers": ["lakers"],
+    "los angeles clippers": ["clippers"],
+    "golden state warriors": ["warriors"],
+    "new york knicks": ["knicks"],
+    "brooklyn nets": ["nets"],
+    "boston celtics": ["celtics"],
+    "new york rangers": ["rangers"],
+    "new york islanders": ["islanders"],
+    "toronto maple leafs": ["maple leafs", "leafs"],
+    "vegas golden knights": ["golden knights", "vegas"],
+}
+
+GENERIC_TEAM_WORDS = {
+    "fc", "cf", "ac", "as", "ss", "ssc", "us", "cd", "ud", "rc", "rcd",
+    "club", "calcio", "sport", "united", "city", "real", "inter", "athletic",
+    "atletico", "saint", "de", "la", "el", "los", "las", "new", "york",
+}
+
+INJURY_KEYWORDS = (
+    "injur", "out", "questionable", "doubtful", "ruled out", "suspend",
+    "ban", "hamstring", "knee", "ankle", "concussion", "illness",
+    "lineup", "starting", "miss", "return", "fitness", "sidelined",
+)
 
 
 def safe_float(val, default=0.0):
@@ -228,32 +278,88 @@ def update_odds_quota_from_headers(response):
             pass
 
 
-def fetch_free_news_snippets(home: str, away: str, max_items: int = 4) -> str:
-    keywords = [w.lower() for w in f"{home} {away}".split() if len(w) > 3]
-    matched = []
-    fallback = []
+def _sport_category(sport_key: str) -> str:
+    s = (sport_key or "").lower()
+    if "nba" in s or "basketball" in s:
+        return "nba"
+    if "nhl" in s or "icehockey" in s:
+        return "nhl"
+    return "soccer"
 
-    for feed_url in FREE_RSS_FEEDS:
-        try:
-            resp = requests.get(feed_url, timeout=6)
-            if resp.status_code != 200:
-                continue
+
+def _build_team_terms(team_name: str) -> list[str]:
+    clean = re.sub(r"[^a-z0-9\s]", " ", (team_name or "").lower()).strip()
+    clean = re.sub(r"\s+", " ", clean)
+    if not clean:
+        return []
+
+    terms = {clean}
+    if clean in TEAM_ALIASES:
+        terms.update(TEAM_ALIASES[clean])
+
+    tokens = [w for w in clean.split() if len(w) > 3 and w not in GENERIC_TEAM_WORDS]
+    terms.update(tokens)
+    return sorted(terms, key=len, reverse=True)
+
+
+def _load_feed_items(feed_url: str) -> list[tuple[str, str]]:
+    if feed_url in _rss_cache:
+        return _rss_cache[feed_url]
+
+    items = []
+    try:
+        resp = requests.get(
+            feed_url,
+            timeout=6,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; OddsBot/1.0)"},
+        )
+        if resp.status_code == 200:
             root = ET.fromstring(resp.text)
-            for item in root.findall(".//item")[:15]:
+            for item in root.findall(".//item")[:30]:
                 title = (item.findtext("title") or "").strip()
-                if not title:
-                    continue
-                fallback.append(title)
-                t_low = title.lower()
-                if any(k in t_low for k in keywords) or any(
-                    inj in t_low for inj in ("injur", "out", "questionable", "ruled out", "suspend")
-                ):
-                    matched.append(title)
-        except Exception:
-            continue
+                desc = re.sub(r"<[^>]+>", " ", (item.findtext("description") or "")).strip()
+                if title:
+                    items.append((title, desc[:220]))
+    except Exception:
+        pass
 
-    chosen = matched[:max_items] if matched else fallback[:2]
-    return " | ".join(chosen) if chosen else "Nessuna notizia RSS trovata."
+    _rss_cache[feed_url] = items
+    return items
+
+
+def fetch_free_news_snippets(home: str, away: str, sport: str = "soccer", max_items: int = 4) -> str:
+    category = _sport_category(sport)
+    feeds = RSS_FEEDS_BY_SPORT.get(category, RSS_FEEDS_BY_SPORT["soccer"])
+
+    home_terms = _build_team_terms(home)
+    away_terms = _build_team_terms(away)
+    all_terms = home_terms + away_terms
+
+    scored = []
+    seen_titles = set()
+
+    for feed_url in feeds:
+        for title, desc in _load_feed_items(feed_url):
+            if title in seen_titles:
+                continue
+            seen_titles.add(title)
+
+            blob = f" {title.lower()} {desc.lower()} "
+            team_hits = sum(1 for t in all_terms if re.search(rf"\b{re.escape(t)}\b", blob))
+            if team_hits == 0:
+                continue
+
+            injury_hits = sum(1 for kw in INJURY_KEYWORDS if kw in blob)
+            score = (team_hits * 10) + (injury_hits * 4)
+            snippet = f"{title} ({desc})" if desc and injury_hits > 0 else title
+            scored.append((score, snippet))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    top_snippets = [s for _, s in scored[:max_items]]
+
+    if not top_snippets:
+        return f"Nessuna notizia specifica trovata nei feed RSS per {home} o {away}."
+    return " | ".join(top_snippets)
 
 
 def call_gemini_with_retry(prompt: str, context_label: str) -> str:
@@ -468,8 +574,9 @@ def should_skip_candidate_from_state(tracked_bets, match_key, current_quota):
 
 
 def run_bot_cycle(tracked_bets):
-    global gemini_calls_this_cycle, odds_quota_exhausted
+    global gemini_calls_this_cycle, odds_quota_exhausted, _rss_cache
     gemini_calls_this_cycle = 0
+    _rss_cache = {}
 
     print(f"🔄 Avvio ciclo 1X2 completo (Calcio, NBA, NHL | Odds API + {GEMINI_MODEL})...")
     sports_to_check = list(LEAGUE_MAPPING.values()) + ALWAYS_ACTIVE_SPORTS
@@ -628,7 +735,7 @@ def run_bot_cycle(tracked_bets):
         formatted_time = item["formatted_time"]
         standard_candidate = item["candidate"]
 
-        news_ctx = fetch_free_news_snippets(home, away)
+        news_ctx = fetch_free_news_snippets(home, away, sport=sport)
         ai_result = analyze_match_1x2_with_gemini(
             sport,
             home,
