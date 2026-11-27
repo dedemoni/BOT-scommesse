@@ -1807,5 +1807,18 @@
         "min_prob": 65.0,
         "status": "rejected",
         "reason": "Prob/approvazione non superata (0.0% vs 65.0%)"
+    },
+    "NewYorkKnicksvsMiamiHeat": {
+        "source": "odds_api_1x2",
+        "sport": "basketball_nba",
+        "home": "New York Knicks",
+        "away": "Miami Heat",
+        "mercato": "1X2",
+        "esito": "New York Knicks",
+        "book": "1xBet",
+        "quota": 1.65,
+        "prob": 65.1,
+        "min_prob": 65.0,
+        "status": "active"
     }
 }
