@@ -2,6 +2,7 @@ from datetime import datetime, timezone, timedelta
 import json
 import os
 import re
+import statistics
 import time
 import xml.etree.ElementTree as ET
 import requests
@@ -30,6 +31,10 @@ NIGHT_CUTOFF_HOUR = int(os.environ.get("NIGHT_CUTOFF_HOUR", "5"))
 
 # Soglia minima di variazione quota per rianalizzare un match precedentemente rifiutato o revocato
 REANALYZE_ODDS_DELTA = float(os.environ.get("REANALYZE_ODDS_DELTA", "0.08"))
+
+# Filtri quantitativi di quota e vantaggio rispetto al consenso di mercato (%)
+MIN_ODDS_THRESHOLD = float(os.environ.get("MIN_ODDS_THRESHOLD", "1.35"))
+MIN_MARKET_EDGE_PCT = float(os.environ.get("MIN_MARKET_EDGE_PCT", "1.5"))
 # ====================================================================
 
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
@@ -127,6 +132,10 @@ def is_draw_outcome(name: str) -> bool:
     if not name:
         return False
     return name.strip().lower() in ("draw", "pareggio", "x", "tie")
+
+
+def now_rome_iso() -> str:
+    return datetime.now(ZoneInfo("Europe/Rome")).isoformat(timespec="seconds")
 
 
 def load_state():
@@ -227,14 +236,39 @@ def get_h2h_market_outcomes(bookmaker):
     return []
 
 
-def find_first_valid_bookmaker(bookmakers):
+def compute_no_vig_probs_for_outcomes(outcomes):
+    """Calcola la probabilità no-vig (%) per ciascun esito di un mercato h2h."""
+    valid = []
+    for out in outcomes:
+        name = out.get("name")
+        price = safe_float(out.get("price"), 0.0)
+        if name and price > 1.0:
+            valid.append((name, price, 1.0 / price))
+
+    if len(valid) < 2:
+        return {}
+
+    total_implied = sum(item[2] for item in valid)
+    if total_implied <= 0:
+        return {}
+
+    no_vig = {}
+    for name, _, raw_p in valid:
+        no_vig[name] = min(round((raw_p / total_implied) * 100.0, 1), 95.0)
+    return no_vig
+
+
+def find_best_or_valid_bookmaker(bookmakers):
+    """Restituisce il bookmaker valido con probabilità no-vig per ciascun esito."""
     if not isinstance(bookmakers, list):
-        return None, []
+        return None, [], {}
     for bm in bookmakers:
         outcomes = get_h2h_market_outcomes(bm)
         if outcomes:
-            return bm.get("title", "Bookmaker"), outcomes
-    return None, []
+            no_vig_map = compute_no_vig_probs_for_outcomes(outcomes)
+            if len(no_vig_map) >= 2:
+                return bm.get("title", "Bookmaker"), outcomes, no_vig_map
+    return None, [], {}
 
 
 def find_outcome_price_across_bookmakers(bookmakers, outcome_name, preferred_book=None):
@@ -258,6 +292,33 @@ def find_outcome_price_across_bookmakers(bookmakers, outcome_name, preferred_boo
                 if price > 0:
                     return price
     return None
+
+
+def compute_market_consensus_for_outcome(bookmakers, outcome_name):
+    """Calcola quota mediana, quota media e probabilità implicita media del mercato."""
+    if not isinstance(bookmakers, list) or not outcome_name:
+        return {}
+    target_low = outcome_name.strip().lower()
+    prices = []
+    implied_probs = []
+
+    for bm in bookmakers:
+        for out in get_h2h_market_outcomes(bm):
+            if (out.get("name") or "").strip().lower() == target_low:
+                price = safe_float(out.get("price"), 0.0)
+                if price > 1.0:
+                    prices.append(price)
+                    implied_probs.append((1.0 / price) * 100.0)
+
+    if not prices:
+        return {}
+
+    return {
+        "books_count": len(prices),
+        "median_price": round(statistics.median(prices), 3),
+        "avg_price": round(statistics.mean(prices), 3),
+        "avg_implied_prob": round(statistics.mean(implied_probs), 2),
+    }
 
 
 def update_odds_quota_from_headers(response):
@@ -362,6 +423,24 @@ def fetch_free_news_snippets(home: str, away: str, sport: str = "soccer", max_it
     return " | ".join(top_snippets)
 
 
+def _sport_specific_guidance(sport_key: str) -> str:
+    cat = _sport_category(sport_key)
+    if cat == "nba":
+        return (
+            "Criteri specifici NBA: verifica back-to-back, trasferte consecutive, gestione riposo/infortuni "
+            "(questionable/out di stelle o titolari) e ritmo/punti segnati-subiti."
+        )
+    if cat == "nhl":
+        return (
+            "Criteri specifici NHL: considera back-to-back, trasferte, portieri titolari/backup probabile, "
+            "equilibrio naturale del ghiaccio e varianza elevata."
+        )
+    return (
+        "Criteri specifici Calcio (1X2): considera importanza della competizione (campionato vs coppa), "
+        "possibile turnover, assenze chiave (portiere, centravanti, difensori centrali) e peso del fattore campo."
+    )
+
+
 def call_gemini_with_retry(prompt: str, context_label: str) -> str:
     global gemini_calls_this_cycle
     if not client:
@@ -408,21 +487,27 @@ def analyze_match_1x2_with_gemini(sport, home, away, match_time_local, standard_
     else:
         role_label = "Casa"
 
+    sport_guide = _sport_specific_guidance(sport)
+    consensus = standard_candidate.get("consensus", {})
+    median_p = consensus.get("median_price", standard_candidate["quota"])
+    edge_pct = standard_candidate.get("market_edge_pct", 0.0)
+
     prompt = f"""
 Sei un analista sportivo specializzato ESCLUSIVAMENTE sul mercato 1X2 (esito finale) per lo sport: {sport}.
 Data/ora locale partita: {match_time_local}.
 Partita: {home} (Casa) vs {away} (Trasferta).
+{sport_guide}
 
 Candidatura 1X2 da valutare:
 - Esito proposto: {standard_candidate['esito']} ({role_label})
-- Quota reale: {standard_candidate['quota']} ({standard_candidate['book']})
-- Probabilità base da quota: {standard_candidate['base_prob']}%
+- Quota reale: {standard_candidate['quota']} ({standard_candidate['book']}) | Mediana mercato: {median_p} | Edge quota vs mercato: {edge_pct}%
+- Probabilità base no-vig da quota: {standard_candidate['base_prob']}%
 - Soglia minima richiesta per approvare: {standard_candidate['min_prob']}%
 
 Notizie recenti da feed RSS:
 {news_context}
 
-Analizza con rigore e prudenza (usa solo informazioni note e affidabili, senza inventare dati):
+Analizza con rigore e prudenza (NON inventare dati: se non hai certezza su un dato, indicalo chiaramente e abbassa `certezza_dati`):
 1. Classifica attuale e ultime 5 partite di {home} e {away}.
 2. Ultimi scontri diretti (H2H) tra {home} e {away}.
 3. Assenze, squalifiche o infortuni rilevanti per {home} e {away}.
@@ -433,6 +518,7 @@ Imposta `approvata: true` SOLO se `probabilita_finale` >= {standard_candidate['m
 
 Rispondi ESCLUSIVAMENTE con un oggetto JSON valido:
 {{
+  "certezza_dati": "alta",
   "stats": {{
     "sconfitte_ultime_5_casa": 0,
     "sconfitte_ultime_5_trasferta": 0,
@@ -463,7 +549,11 @@ Rispondi ESCLUSIVAMENTE con un oggetto JSON valido:
     return parsed
 
 
-def passes_hard_stats_filter(stats, is_away_team, is_draw=False):
+def passes_hard_stats_filter(stats, is_away_team, is_draw=False, certainty="media"):
+    cert_low = (certainty or "media").strip().lower()
+    if cert_low in ("bassa", "low"):
+        return False, "Certezza dei dati troppo bassa per confermare"
+
     if not isinstance(stats, dict) or not stats:
         return False, "Statistiche mancanti o non valide"
     try:
@@ -498,51 +588,35 @@ def passes_hard_stats_filter(stats, is_away_team, is_draw=False):
 
 def extract_standard_candidate(match, home, away):
     bookmakers = match.get("bookmakers", [])
-    book, outcomes = find_first_valid_bookmaker(bookmakers)
-    if not outcomes:
+    book, outcomes, no_vig_probs = find_best_or_valid_bookmaker(bookmakers)
+    if not outcomes or len(no_vig_probs) < 2:
         return None
 
-    outcomes_map = {}
-    for bookmaker in bookmakers:
-        for out in get_h2h_market_outcomes(bookmaker):
-            name = out.get("name")
-            price = safe_float(out.get("price"), 0.0)
-            if name and price > 1.0:
-                outcomes_map.setdefault(name, []).append(price)
-
-    probs_dict = {}
-    for out in outcomes:
-        name = out.get("name")
-        price = safe_float(out.get("price"), 0.0)
-        if not name or price <= 1.0:
-            continue
-        if name in outcomes_map and len(outcomes_map[name]) > 1:
-            avg_price = sum(outcomes_map[name]) / len(outcomes_map[name])
-            if price > avg_price * 1.15:
-                continue
-        p = round(((1.0 / price) * 100.0) + 4.5, 1)
-        probs_dict[name] = min(p, 95.0)
-
-    if len(probs_dict) < 2:
-        return None
-
-    sorted_p = sorted(probs_dict.values(), reverse=True)
+    sorted_p = sorted(no_vig_probs.values(), reverse=True)
     if (sorted_p[0] - sorted_p[1]) < 12.0:
         return None
 
     for out in outcomes:
         name = out.get("name")
-        if name not in probs_dict:
+        if name not in no_vig_probs:
             continue
         price = safe_float(out.get("price"), 0.0)
-        if price <= 1.0:
+        if price <= MIN_ODDS_THRESHOLD:
             continue
-        base_prob = probs_dict[name]
+
+        consensus = compute_market_consensus_for_outcome(bookmakers, name)
+        median_price = consensus.get("median_price", price)
+        market_edge_pct = round(((price - median_price) / median_price) * 100.0, 2) if median_price > 0 else 0.0
+
+        if consensus.get("books_count", 0) >= 2 and market_edge_pct < MIN_MARKET_EDGE_PCT:
+            continue
+
+        base_prob = no_vig_probs[name]
         draw_flag = is_draw_outcome(name)
         is_away_team = (not draw_flag) and (name.strip().lower() == away.strip().lower())
         min_prob_required = 70.0 if is_away_team else 65.0
 
-        if price > 1.29 and base_prob >= min_prob_required:
+        if base_prob >= min_prob_required:
             return {
                 "esito": name,
                 "is_away": is_away_team,
@@ -551,6 +625,8 @@ def extract_standard_candidate(match, home, away):
                 "book": book,
                 "base_prob": base_prob,
                 "min_prob": min_prob_required,
+                "market_edge_pct": market_edge_pct,
+                "consensus": consensus,
             }
 
     return None
@@ -571,6 +647,44 @@ def should_skip_candidate_from_state(tracked_bets, match_key, current_quota):
             return True
 
     return False
+
+
+def update_closing_line_tracking(tracked_bets, match, match_key, dt_local):
+    """Aggiorna l'ultima quota osservata (closing line) e il delta rispetto alla quota iniziale."""
+    entry = tracked_bets.get(match_key)
+    if not isinstance(entry, dict):
+        return False
+
+    target_outcome = entry.get("esito")
+    preferred_book = entry.get("book")
+    latest_price = find_outcome_price_across_bookmakers(
+        match.get("bookmakers", []),
+        target_outcome,
+        preferred_book=preferred_book,
+    )
+    if not latest_price or latest_price <= 1.0:
+        return False
+
+    initial_quota = safe_float(entry.get("initial_quota", entry.get("quota")), 0.0)
+    changed = False
+
+    if entry.get("initial_quota") is None and initial_quota > 0:
+        entry["initial_quota"] = initial_quota
+        changed = True
+
+    if entry.get("closing_quota") != latest_price:
+        entry["closing_quota"] = latest_price
+        entry["closing_updated_at"] = now_rome_iso()
+        entry["commence_time_local"] = dt_local.isoformat(timespec="seconds")
+        if initial_quota > 0:
+            entry["odds_move_pct"] = round(((latest_price - initial_quota) / initial_quota) * 100.0, 2)
+        changed = True
+
+    if entry.get("status") == "active" and entry.get("result") is None:
+        entry["result"] = "pending_result"
+        changed = True
+
+    return changed
 
 
 def run_bot_cycle(tracked_bets):
@@ -656,14 +770,17 @@ def run_bot_cycle(tracked_bets):
 
             print(f"📌 [{sport}] Trovati {len(data)} match API, {len(window_matches)} nella finestra fino alle {NIGHT_CUTOFF_HOUR:02d}:00.")
 
-            # 1) Controlla eventuali value bet attive per revoca se la quota cala sotto soglia
-            for match in data:
+            # 1) Aggiorna chiusura quota e controlla revoca value bet attive
+            for match, dt_local in window_matches:
                 home = match.get("home_team")
                 away = match.get("away_team")
                 if not home or not away:
                     continue
 
                 match_key = get_existing_key(tracked_bets, home, away)
+                if update_closing_line_tracking(tracked_bets, match, match_key, dt_local):
+                    save_state(tracked_bets)
+
                 tracked_entry = tracked_bets.get(match_key)
                 if isinstance(tracked_entry, dict) and tracked_entry.get("status") == "active":
                     target_outcome = tracked_entry.get("esito")
@@ -674,8 +791,15 @@ def run_bot_cycle(tracked_bets):
                         preferred_book=preferred_book,
                     )
                     if current_price and current_price > 1.0:
-                        implied_prob = (1.0 / current_price) * 100.0
-                        current_prob = min(round(implied_prob + 4.5, 1), 95.0)
+                        outcomes_for_book = []
+                        for bm in match.get("bookmakers", []):
+                            if bm.get("title") == preferred_book:
+                                outcomes_for_book = get_h2h_market_outcomes(bm)
+                                break
+                        no_vig_map = compute_no_vig_probs_for_outcomes(outcomes_for_book)
+                        current_prob = no_vig_map.get(target_outcome)
+                        if current_prob is None:
+                            current_prob = min(round((1.0 / current_price) * 100.0, 1), 95.0)
                         min_p = safe_float(tracked_entry.get("min_prob"), 65.0)
                         if current_prob < min_p:
                             msg = (
@@ -690,6 +814,7 @@ def run_bot_cycle(tracked_bets):
                             if send_discord_alert(msg):
                                 tracked_bets[match_key]["status"] = "revoked"
                                 tracked_bets[match_key]["revoked_price"] = current_price
+                                tracked_bets[match_key]["revoked_at"] = now_rome_iso()
                                 save_state(tracked_bets)
                                 time.sleep(1)
 
@@ -718,6 +843,7 @@ def run_bot_cycle(tracked_bets):
                     "away": away,
                     "match_key": match_key,
                     "formatted_time": format_match_time(commence_time),
+                    "commence_time_local": dt_local.isoformat(timespec="seconds"),
                     "candidate": candidate,
                 })
 
@@ -747,6 +873,7 @@ def run_bot_cycle(tracked_bets):
         if not ai_result:
             continue
 
+        certainty_txt = str(ai_result.get("certezza_dati", "media")).strip().lower()
         stats_obj = ai_result.get("stats", {})
         assenze_txt = ai_result.get("assenze_infortuni", "Da verificare")
         std_eval = ai_result.get("standard_1x2", {})
@@ -760,6 +887,7 @@ def run_bot_cycle(tracked_bets):
             stats_obj,
             standard_candidate["is_away"],
             is_draw=standard_candidate["is_draw"],
+            certainty=certainty_txt,
         )
         ai_approved = bool(std_eval.get("approvata", False)) and (final_prob >= min_req)
 
@@ -785,14 +913,14 @@ def run_bot_cycle(tracked_bets):
                 f"⚔️ Match: {home} vs {away}\n"
                 f"⏰ Inizio: {formatted_time}\n"
                 f"🎯 Esito (1X2): **{standard_candidate['esito']}** {side_tag}\n"
-                f"💰 Quota Reale: {standard_candidate['quota']} ({standard_candidate['book']})\n"
-                f"📊 Probabilità Stimata: {final_prob}%\n"
+                f"💰 Quota Reale: {standard_candidate['quota']} ({standard_candidate['book']}) | Edge: +{standard_candidate.get('market_edge_pct', 0.0)}%\n"
+                f"📊 Probabilità Stimata: {final_prob}% (No-vig: {standard_candidate['base_prob']}%)\n"
                 f"💵 Stake: **{recommended_stake}**\n"
                 f"📊 Classifica & Ultime 5: {classifica_forma}\n"
                 f"🆚 Scontri Diretti (H2H): {h2h_txt}\n"
                 f"⚽🏀 Gol/Punti Fatti e Subiti: {gol_punti_txt}\n"
                 f"🏟️🔋 Campo & Stanchezza: {campo_stanchezza_txt}\n"
-                f"🩺 Assenze & Infortuni: {assenze_txt}\n"
+                f"🩺 Assenze & Infortuni: {assenze_txt} (Certezza: {certainty_txt})\n"
                 f"📝 Perché e come abbiamo scelto: {motivazione}\n"
                 "✅ Tutti i Filtri 1X2 Superati!"
             )
@@ -806,9 +934,17 @@ def run_bot_cycle(tracked_bets):
                     "esito": standard_candidate["esito"],
                     "book": standard_candidate["book"],
                     "quota": standard_candidate["quota"],
+                    "initial_quota": standard_candidate["quota"],
+                    "closing_quota": standard_candidate["quota"],
+                    "market_edge_pct": standard_candidate.get("market_edge_pct", 0.0),
+                    "no_vig_prob": standard_candidate["base_prob"],
                     "prob": final_prob,
                     "min_prob": min_req,
+                    "certainty": certainty_txt,
+                    "commence_time_local": item["commence_time_local"],
+                    "created_at": now_rome_iso(),
                     "status": "active",
+                    "result": "pending_result",
                 }
                 save_state(tracked_bets)
                 time.sleep(1)
@@ -824,8 +960,14 @@ def run_bot_cycle(tracked_bets):
                 "esito": standard_candidate["esito"],
                 "book": standard_candidate["book"],
                 "quota": standard_candidate["quota"],
+                "initial_quota": standard_candidate["quota"],
+                "market_edge_pct": standard_candidate.get("market_edge_pct", 0.0),
+                "no_vig_prob": standard_candidate["base_prob"],
                 "prob": final_prob,
                 "min_prob": min_req,
+                "certainty": certainty_txt,
+                "commence_time_local": item["commence_time_local"],
+                "created_at": now_rome_iso(),
                 "status": "rejected",
                 "reason": reason,
             }
