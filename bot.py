@@ -28,7 +28,7 @@ ODDS_API_MIN_REMAINING = int(os.environ.get("ODDS_API_MIN_REMAINING", "25"))
 # Finestra notturna: include partite fino alle 05:00 locali del giorno successivo
 NIGHT_CUTOFF_HOUR = int(os.environ.get("NIGHT_CUTOFF_HOUR", "5"))
 
-# Soglia minima di variazione quota per rianalizzare un match precedentemente rifiutato
+# Soglia minima di variazione quota per rianalizzare un match precedentemente rifiutato o revocato
 REANALYZE_ODDS_DELTA = float(os.environ.get("REANALYZE_ODDS_DELTA", "0.08"))
 # ====================================================================
 
@@ -168,13 +168,22 @@ def extract_json_dict(text: str) -> dict:
         return {}
 
 
+def get_h2h_market_outcomes(bookmaker):
+    if not isinstance(bookmaker, dict):
+        return []
+    for mkt in bookmaker.get("markets", []):
+        if mkt.get("key") == "h2h" and isinstance(mkt.get("outcomes"), list) and len(mkt["outcomes"]) >= 2:
+            return mkt["outcomes"]
+    return []
+
+
 def find_first_valid_bookmaker(bookmakers):
     if not isinstance(bookmakers, list):
         return None, []
     for bm in bookmakers:
-        markets = bm.get("markets", [])
-        if markets and isinstance(markets[0].get("outcomes"), list) and len(markets[0]["outcomes"]) >= 2:
-            return bm.get("title", "Bookmaker"), markets[0]["outcomes"]
+        outcomes = get_h2h_market_outcomes(bm)
+        if outcomes:
+            return bm.get("title", "Bookmaker"), outcomes
     return None, []
 
 
@@ -186,20 +195,18 @@ def find_outcome_price_across_bookmakers(bookmakers, outcome_name, preferred_boo
     if preferred_book:
         for bm in bookmakers:
             if bm.get("title") == preferred_book:
-                for mkt in bm.get("markets", []):
-                    for out in mkt.get("outcomes", []):
-                        if (out.get("name") or "").strip().lower() == target_low:
-                            price = safe_float(out.get("price"), 0.0)
-                            if price > 0:
-                                return price
+                for out in get_h2h_market_outcomes(bm):
+                    if (out.get("name") or "").strip().lower() == target_low:
+                        price = safe_float(out.get("price"), 0.0)
+                        if price > 0:
+                            return price
 
     for bm in bookmakers:
-        for mkt in bm.get("markets", []):
-            for out in mkt.get("outcomes", []):
-                if (out.get("name") or "").strip().lower() == target_low:
-                    price = safe_float(out.get("price"), 0.0)
-                    if price > 0:
-                        return price
+        for out in get_h2h_market_outcomes(bm):
+            if (out.get("name") or "").strip().lower() == target_low:
+                price = safe_float(out.get("price"), 0.0)
+                if price > 0:
+                    return price
     return None
 
 
@@ -269,7 +276,7 @@ def call_gemini_with_retry(prompt: str, context_label: str) -> str:
                     temperature=0.15,
                 ),
             )
-            return response.text or ""
+            return getattr(response, "text", None) or ""
         except Exception as e:
             err_str = str(e)
             if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
@@ -352,7 +359,7 @@ Rispondi ESCLUSIVAMENTE con un oggetto JSON valido:
 
 def passes_hard_stats_filter(stats, is_away_team, is_draw=False):
     if not isinstance(stats, dict) or not stats:
-        return True, "Filtro quote attivo"
+        return False, "Statistiche mancanti o non valide"
     try:
         if is_draw:
             home_losses = int(safe_float(stats.get("sconfitte_ultime_5_casa", 0), 0))
@@ -391,13 +398,11 @@ def extract_standard_candidate(match, home, away):
 
     outcomes_map = {}
     for bookmaker in bookmakers:
-        markets = bookmaker.get("markets", [])
-        if markets:
-            for out in markets[0].get("outcomes", []):
-                name = out.get("name")
-                price = safe_float(out.get("price"), 0.0)
-                if name and price > 1.0:
-                    outcomes_map.setdefault(name, []).append(price)
+        for out in get_h2h_market_outcomes(bookmaker):
+            name = out.get("name")
+            price = safe_float(out.get("price"), 0.0)
+            if name and price > 1.0:
+                outcomes_map.setdefault(name, []).append(price)
 
     probs_dict = {}
     for out in outcomes:
@@ -451,12 +456,12 @@ def should_skip_candidate_from_state(tracked_bets, match_key, current_quota):
         return False
 
     status = entry.get("status")
-    if status in ("active", "revoked"):
+    if status == "active":
         return True
 
-    if status == "rejected":
-        prev_quota = safe_float(entry.get("quota"), 0.0)
-        if prev_quota > 0 and abs(current_quota - prev_quota) < REANALYZE_ODDS_DELTA:
+    if status in ("rejected", "revoked"):
+        ref_quota = safe_float(entry.get("revoked_price") if status == "revoked" else entry.get("quota"), 0.0)
+        if ref_quota > 0 and abs(current_quota - ref_quota) < REANALYZE_ODDS_DELTA:
             return True
 
     return False
@@ -472,10 +477,14 @@ def run_bot_cycle(tracked_bets):
     italy_tz = ZoneInfo("Europe/Rome")
     now_local = datetime.now(italy_tz)
 
-    start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    if now_local.hour < NIGHT_CUTOFF_HOUR:
+        start_local = (now_local - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    else:
+        start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+
     # Include partite fino alle 05:00 locali del giorno successivo per coprire NBA e NHL notturne
     end_local = start_local + timedelta(hours=24 + NIGHT_CUTOFF_HOUR)
-    min_new_match_time = now_local - timedelta(minutes=15)
+    min_new_match_time = now_local - timedelta(minutes=5)
 
     start_utc = start_local.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     end_utc = end_local.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
