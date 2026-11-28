@@ -61,11 +61,13 @@
         "away": "New England Revolution",
         "esito": "Philadelphia Union",
         "prob": 75.9,
-        "status": "active",
-        "closing_quota": 1.49,
-        "closing_updated_at": "2026-11-28T13:50:28+01:00",
+        "status": "revoked",
+        "closing_quota": 1.54,
+        "closing_updated_at": "2026-11-28T18:53:10+01:00",
         "commence_time_local": "2026-11-28T22:30:00+01:00",
-        "result": "pending_result"
+        "result": "pending_result",
+        "revoked_price": 1.54,
+        "revoked_at": "2026-11-28T18:53:10+01:00"
     },
     "Boston BruinsvsSan Jose Sharks": {
         "sport": "icehockey_nhl",
